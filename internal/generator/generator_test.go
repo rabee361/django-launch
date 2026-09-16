@@ -10,7 +10,61 @@ import (
 	"main/internal/config"
 )
 
+func TestGenerateProject_DefaultOutputDir(t *testing.T) {
+	// TEST-GEN-20: If OutputDir is empty, it should default to cwd + ProjectName
+	cfg := config.ProjectConfig{
+		ProjectName: "test_default_output_dir_proj",
+		OutputDir:   "",
+		// Provide an invalid PythonCmd so it safely fails after resolving OutputDir
+		PythonCmd: "non_existent_python_binary_xyz",
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	expectedOutputDir := filepath.Join(cwd, "test_default_output_dir_proj")
+	defer os.RemoveAll(expectedOutputDir)
+
+	// Will fail at step 2 (creating venv) because PythonCmd is fake
+	_ = GenerateProject(&cfg, nil)
+
+	if cfg.OutputDir != expectedOutputDir {
+		t.Errorf("TEST-GEN-20: expected cfg.OutputDir to be set to %q, got %q", expectedOutputDir, cfg.OutputDir)
+	}
+}
+
+func TestGenerateProject_InvalidDirError(t *testing.T) {
+	// TEST-GEN-21: Error propagation on directory creation failure
+	// Create a file and attempt to use it as a directory path
+	tempFile, err := os.CreateTemp("", "invalid_dir_file_*")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	tempFilePath := tempFile.Name()
+	tempFile.Close()
+	defer os.Remove(tempFilePath)
+
+	// Using a file path + child as directory path will cause MkdirAll to fail
+	impossibleDir := filepath.Join(tempFilePath, "cannot_create_dir_here")
+
+	cfg := config.ProjectConfig{
+		ProjectName: "fail_project",
+		OutputDir:   impossibleDir,
+	}
+
+	err = GenerateProject(&cfg, nil)
+	if err == nil {
+		t.Errorf("TEST-GEN-21: expected error when creating directory inside a regular file, got nil")
+	}
+}
+
 func TestGenerateProjectEndToEnd(t *testing.T) {
+	// TEST-GEN-22: Full end-to-end integration test
+	if testing.Short() {
+		t.Skip("skipping slow end-to-end test in short mode")
+	}
+
 	tempDir, err := os.MkdirTemp("", "django_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -34,11 +88,26 @@ func TestGenerateProjectEndToEnd(t *testing.T) {
 		PythonCmd:    pyCmd,
 	}
 
+	var recordedSteps []int
+	var recordedTotals []int
+
 	err = GenerateProject(&cfg, func(step, total int, desc string) {
+		recordedSteps = append(recordedSteps, step)
+		recordedTotals = append(recordedTotals, total)
 		t.Logf("[%d/%d] %s", step, total, desc)
 	})
 	if err != nil {
 		t.Fatalf("GenerateProject failed: %v", err)
+	}
+
+	// TEST-GEN-19: Step Progress Callback verification
+	if len(recordedSteps) != 6 {
+		t.Errorf("TEST-GEN-19: expected 6 progress steps for Docker project, got %d", len(recordedSteps))
+	}
+	for _, total := range recordedTotals {
+		if total != 6 {
+			t.Errorf("TEST-GEN-19: expected total steps to be 6, got %d", total)
+		}
 	}
 
 	// 1. Check requirements.txt

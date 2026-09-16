@@ -10,8 +10,7 @@ import (
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "q", "ctrl+c", "esc":
+		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
 
@@ -29,7 +28,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateConfirm(msg)
 
 		case StepDone, StepError:
-			if msg.String() == "q" || msg.String() == "esc" {
+			if msg.String() == "q" || msg.String() == "esc" || msg.String() == "enter" {
 				return m, tea.Quit
 			}
 		}

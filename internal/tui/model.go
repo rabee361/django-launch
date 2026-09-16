@@ -69,7 +69,6 @@ func NewModel() Model {
 	ti.Placeholder = "my_django_app"
 	ti.Focus()
 	ti.CharLimit = 50
-	// ti.Width = 40
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot

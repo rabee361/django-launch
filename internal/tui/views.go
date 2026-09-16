@@ -16,7 +16,7 @@ func (m Model) View() tea.View {
 
 	content, err := os.ReadFile("ascii_art.txt")
 	if err != nil {
-		fmt.Println("Failed to read file: %s", err)
+		content = []byte("  DJANGO LAUNCH")
 	}
 
 	// Header Banner
