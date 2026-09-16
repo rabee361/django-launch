@@ -46,13 +46,16 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) error {
 	}
 	content := string(data)
 
-	// 1. Configure INSTALLED_APPS
+	// 1. INSTALLED_APPS
 	var newApps []string
 	if cfg.HasDependency("djangorestframework") {
 		newApps = append(newApps, "    'rest_framework',")
 	}
 	if cfg.HasDependency("django-silk") {
 		newApps = append(newApps, "    'silk',")
+	}
+	if cfg.HasDependency("djangorestframework-simplejwt") {
+		newApps = append(newApps, "    'rest_framework_simplejwt',")
 	}
 
 	if len(newApps) > 0 {
@@ -63,7 +66,7 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) error {
 		}
 	}
 
-	// 2. Configure MIDDLEWARE for Silk
+	// 2. MIDDLEWARE for Silk
 	if cfg.HasDependency("django-silk") {
 		reMiddleware := regexp.MustCompile(`(MIDDLEWARE\s*=\s*\[)`)
 		if reMiddleware.MatchString(content) {
@@ -73,7 +76,7 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) error {
 		}
 	}
 
-	// 3. Configure MEDIA_URL and MEDIA_ROOT for Pillow
+	// 3. MEDIA_URL and MEDIA_ROOT for Pillow
 	if cfg.HasDependency("pillow") {
 		mediaConfig := `
 # Media files (Uploaded files)
@@ -95,6 +98,7 @@ func patchUrls(urlsPath string, cfg *config.ProjectConfig) error {
 
 	needsInclude := cfg.HasDependency("django-silk")
 	needsStatic := cfg.HasDependency("pillow")
+	// needsRestFrameworkSetup := cfg.HasDependency("djangorestframework")
 
 	// 1. Update django.urls import for include
 	if needsInclude {

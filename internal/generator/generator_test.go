@@ -29,7 +29,7 @@ func TestGenerateProjectEndToEnd(t *testing.T) {
 		ProjectName:  projectName,
 		OutputDir:    projectDir,
 		WithDocker:   true,
-		Dependencies: []string{"djangorestframework", "pillow", "django-silk"},
+		Dependencies: []string{"djangorestframework", "pillow", "django-silk", "djangorestframework-simplejwt"},
 		UseUv:        hasUv,
 		PythonCmd:    pyCmd,
 	}
@@ -47,7 +47,7 @@ func TestGenerateProjectEndToEnd(t *testing.T) {
 		t.Fatalf("requirements.txt missing: %v", err)
 	}
 	reqContent := string(reqBytes)
-	for _, dep := range []string{"Django", "djangorestframework", "pillow", "django-silk"} {
+	for _, dep := range []string{"Django", "djangorestframework", "pillow", "django-silk", "djangorestframework-simplejwt"} {
 		if !strings.Contains(reqContent, dep) {
 			t.Errorf("expected %s in requirements.txt", dep)
 		}

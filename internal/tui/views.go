@@ -5,17 +5,22 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"os"
 
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	var b strings.Builder
 
+	content, err := os.ReadFile("ascii_art.txt")
+	if err != nil {
+		fmt.Println("Failed to read file: %s", err)
+	}
+
 	// Header Banner
-	b.WriteString(titleStyle.Render("⚡ Django Project Scaffolder"))
-	b.WriteString("\n")
-	b.WriteString(subtitleStyle.Render("Quickly generate modern, battery-included Django projects from your CLI."))
+	b.WriteString(titleStyle.Render(string(content)))
 	b.WriteString("\n\n")
 
 	switch m.step {
@@ -35,7 +40,9 @@ func (m Model) View() string {
 		b.WriteString(m.viewError())
 	}
 
-	return b.String()
+	v := tea.NewView(b.String())
+
+	return v
 }
 
 func (m Model) viewProjectName() string {
@@ -192,17 +199,6 @@ func (m Model) viewDone() string {
 		activateCmd = fmt.Sprintf("source %s/.venv/bin/activate", m.cfg.ProjectName)
 	}
 
-	var notes []string
-	if m.depChecked["django-silk"] {
-		notes = append(notes, "• Silk profiling UI will be accessible at http://localhost:8000/silk/")
-	}
-	if m.depChecked["pillow"] {
-		notes = append(notes, "• Media uploads configured at /media/ backed by ./media/ folder")
-	}
-	if m.dockerChoice == 0 {
-		notes = append(notes, "• Dockerfile generated for containerized execution")
-	}
-
 	instructions := fmt.Sprintf(
 		"Next Steps:\n\n"+
 			"  1. Enter your project directory:\n"+
@@ -216,10 +212,6 @@ func (m Model) viewDone() string {
 		m.cfg.ProjectName,
 		activateCmd,
 	)
-
-	if len(notes) > 0 {
-		instructions += "\nConfiguration Notes:\n" + strings.Join(notes, "\n") + "\n"
-	}
 
 	b.WriteString(cardStyle.Render(instructions) + "\n\n")
 	b.WriteString(helpStyle.Render("Press Enter or 'q' to exit."))

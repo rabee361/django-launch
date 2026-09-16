@@ -1,0 +1,5 @@
+Django>=5.0
+djangorestframework
+pillow
+django-silk
+djangorestframework-simplejwt

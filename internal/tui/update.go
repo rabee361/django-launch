@@ -3,15 +3,15 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/spinner"
+	tea "charm.land/bubbletea/v2"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyCtrlC:
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "q", "ctrl+c", "esc":
 			return m, tea.Quit
 		}
 
@@ -29,7 +29,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateConfirm(msg)
 
 		case StepDone, StepError:
-			if msg.Type == tea.KeyEnter || msg.String() == "q" || msg.Type == tea.KeyEsc {
+			if msg.String() == "q" || msg.String() == "esc" {
 				return m, tea.Quit
 			}
 		}
@@ -64,8 +64,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateProjectName(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEnter:
+	switch msg.String() {
+	case "enter":
 		name := strings.TrimSpace(m.textInput.Value())
 		if err := validateProjectName(name); err != nil {
 			m.nameError = err.Error()
@@ -124,7 +124,6 @@ func (m Model) updateDependencies(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		currentID := m.depOptions[m.depCursor].ID
 		m.depChecked[currentID] = !m.depChecked[currentID]
 	case "a":
-		// Toggle select all
 		allSelected := true
 		for _, opt := range m.depOptions {
 			if !m.depChecked[opt.ID] {

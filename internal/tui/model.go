@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 
 	"main/internal/config"
 	"main/internal/generator"
@@ -48,23 +48,18 @@ type Model struct {
 	spinner   spinner.Model
 	err       error
 
-	// Step 1: Project Name
 	nameError string
 
-	// Step 2: Docker Choice (0 = Yes, 1 = No)
 	dockerChoice int
 
-	// Step 3: Dependencies
 	depOptions []DependencyOption
 	depCursor  int
 	depChecked map[string]bool
 
-	// Step 5: Executing
 	progressSub   chan tea.Msg
 	progressItems []string
 	currentTask   string
 
-	// System detection
 	hasUv     bool
 	pythonCmd string
 }
@@ -74,7 +69,7 @@ func NewModel() Model {
 	ti.Placeholder = "my_django_app"
 	ti.Focus()
 	ti.CharLimit = 50
-	ti.Width = 40
+	// ti.Width = 40
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -92,7 +87,7 @@ func NewModel() Model {
 		},
 		hasUv:        hasUv,
 		pythonCmd:    pyCmd,
-		dockerChoice: 0, // Default to Yes
+		dockerChoice: 0,
 		depOptions: []DependencyOption{
 			{
 				ID:          "djangorestframework",
@@ -108,6 +103,11 @@ func NewModel() Model {
 				ID:          "django-silk",
 				Name:        "Django Silk",
 				Description: "Silky-smooth profiling and SQL query inspection",
+			},
+			{
+				ID:          "djangorestframework-simplejwt",
+				Name:        "Django REST Framework Simple JWT",
+				Description: "Simple JWT authentication for Django REST Framework",
 			},
 		},
 		depCursor:  0,
@@ -145,7 +145,6 @@ func (m *Model) startGeneration() tea.Cmd {
 	m.progressItems = nil
 	m.currentTask = "Starting project generation..."
 
-	// Collect dependencies
 	var deps []string
 	for _, opt := range m.depOptions {
 		if m.depChecked[opt.ID] {
