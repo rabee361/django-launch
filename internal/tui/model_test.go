@@ -156,7 +156,7 @@ func TestNewModel(t *testing.T) {
 		t.Errorf("TEST-TUI-06: expected 4 dependency options, got %d", len(m.depOptions))
 	}
 
-	expectedIDs := []string{"djangorestframework", "pillow", "django-silk", "djangorestframework-simplejwt"}
+	expectedIDs := []string{"djangorestframework", "pillow", "django-silk", "djangorestframework-simplejwt","django-cors-headers", "django-debug-toolbar","django-filter"}
 	for i, id := range expectedIDs {
 		if m.depOptions[i].ID != id {
 			t.Errorf("TEST-TUI-06: depOption[%d] expected ID %q, got %q", i, id, m.depOptions[i].ID)

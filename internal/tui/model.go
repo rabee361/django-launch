@@ -108,6 +108,26 @@ func NewModel() Model {
 				Name:        "Django REST Framework Simple JWT",
 				Description: "Simple JWT authentication for Django REST Framework",
 			},
+			{
+				ID:          "django-filter",
+				Name:        "Django Filters",
+				Description: "Django filtering library",
+			},
+			{
+				ID:          "django-cors-headers",
+				Name:        "Django CORS Headers",
+				Description: "CORS headers for Django",
+			},
+			{
+				ID:          "django-environ",
+				Name:        "Django Environ",
+				Description: "Environment variable management for Django",
+			},
+			{
+				ID:          "django-debug-toolbar",
+				Name:        "Django Debug Toolbar",
+				Description: "A configurable debug toolbar for Django",
+			},
 		},
 		depCursor:  0,
 		depChecked: make(map[string]bool),

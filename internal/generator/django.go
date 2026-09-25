@@ -54,6 +54,15 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) error {
 	if cfg.HasDependency("django-silk") {
 		newApps = append(newApps, "    'silk',")
 	}
+	if cfg.HasDependency("django-filter") {
+		newApps = append(newApps, "    'django_filters',")
+	}
+	if cfg.HasDependency("django-debug-toolbar") {
+		newApps = append(newApps, "    'debug_toolbar',")
+	}
+	if cfg.HasDependency("django-cors-headers") {
+		newApps = append(newApps, "    'corsheaders',")
+	}
 	if cfg.HasDependency("djangorestframework-simplejwt") {
 		newApps = append(newApps, "    'rest_framework_simplejwt',")
 	}
@@ -66,7 +75,7 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) error {
 		}
 	}
 
-	// 2. MIDDLEWARE for Silk
+	// 2. MIDDLEWARE for packages
 	if cfg.HasDependency("django-silk") {
 		reMiddleware := regexp.MustCompile(`(MIDDLEWARE\s*=\s*\[)`)
 		if reMiddleware.MatchString(content) {
@@ -76,7 +85,16 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) error {
 		}
 	}
 
-	// 3. MEDIA_URL and MEDIA_ROOT for Pillow
+	if cfg.HasDependency("django-debug-toolbar") {
+		reMiddleware := regexp.MustCompile(`(MIDDLEWARE\s*=\s*\[)`)
+		if reMiddleware.MatchString(content) {
+			silkMiddleware := "    'debug_toolbar.middleware.DebugToolbarMiddleware',"
+			replacement := "${1}\n" + silkMiddleware
+			content = reMiddleware.ReplaceAllString(content, replacement)
+		}
+	}
+
+	// 3. MEDIA_URL and MEDIA_ROOT 
 	if cfg.HasDependency("pillow") {
 		mediaConfig := `
 # Media files (Uploaded files)
@@ -98,6 +116,7 @@ func patchUrls(urlsPath string, cfg *config.ProjectConfig) error {
 
 	needsInclude := cfg.HasDependency("django-silk")
 	needsStatic := cfg.HasDependency("pillow")
+	needsDebugToolBar := cfg.HasDependency("django-debug-toolbar")
 	// needsRestFrameworkSetup := cfg.HasDependency("djangorestframework")
 
 	// 1. Update django.urls import for include
@@ -125,6 +144,16 @@ func patchUrls(urlsPath string, cfg *config.ProjectConfig) error {
 		}
 	}
 
+	if needsDebugToolBar {
+		reAdminImport := regexp.MustCompile(`(?m)^from django\.contrib import admin`)
+		debugToolBarImports := "from debug_toolbar.toolbar import debug_toolbar_urls"
+		if reAdminImport.MatchString(content) {
+			content = reAdminImport.ReplaceAllLiteralString(content, "from django.contrib import admin\n"+debugToolBarImports)
+		} else {
+			content = debugToolBarImports + content
+		}
+	}
+
 	// 3. Add routes inside urlpatterns
 	if cfg.HasDependency("django-silk") {
 		silkRoute := "    path('silk/', include('silk.urls', namespace='silk')),"
@@ -139,6 +168,14 @@ func patchUrls(urlsPath string, cfg *config.ProjectConfig) error {
 		mediaPatterns := `
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+`
+		content += mediaPatterns
+	}
+
+	// 5. Add debug tool bar config 
+	if cfg.HasDependency("django-debug-toolbar") {
+		mediaPatterns := `
+urlpatterns += debug_toolbar_urls()
 `
 		content += mediaPatterns
 	}

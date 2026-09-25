@@ -83,7 +83,7 @@ func TestGenerateProjectEndToEnd(t *testing.T) {
 		ProjectName:  projectName,
 		OutputDir:    projectDir,
 		WithDocker:   true,
-		Dependencies: []string{"djangorestframework", "pillow", "django-silk", "djangorestframework-simplejwt"},
+		Dependencies: []string{"pillow", "django-silk", "djangorestframework-simplejwt","django-filter","django-cors-headers","django-environ","django-debug-toolbar"},
 		UseUv:        hasUv,
 		PythonCmd:    pyCmd,
 	}
