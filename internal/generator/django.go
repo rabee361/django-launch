@@ -66,6 +66,9 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) error {
 	if cfg.HasDependency("djangorestframework-simplejwt") {
 		newApps = append(newApps, "    'rest_framework_simplejwt',")
 	}
+	if cfg.HasDependency("django-modeltranslation") {
+		newApps = append(newApps, "    'modeltranslation',")
+	}
 
 	if len(newApps) > 0 {
 		reApps := regexp.MustCompile(`(INSTALLED_APPS\s*=\s*\[)`)

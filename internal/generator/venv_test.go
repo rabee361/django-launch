@@ -32,12 +32,12 @@ func TestGenerateRequirementsTxt_Base(t *testing.T) {
 	content := string(contentBytes)
 	lines := strings.Split(strings.TrimSpace(content), "\n")
 
-	// TEST-GEN-01: Django>=5.0 must always be the first dependency
+	// TEST-GEN-01: Django>=6.0 must always be the first dependency
 	if len(lines) != 1 {
 		t.Errorf("TEST-GEN-01: expected 1 line in requirements.txt, got %d (lines: %v)", len(lines), lines)
 	}
-	if lines[0] != "Django>=5.0" {
-		t.Errorf("TEST-GEN-01: expected 'Django>=5.0', got %q", lines[0])
+	if lines[0] != "Django>=6.0" {
+		t.Errorf("TEST-GEN-01: expected 'Django>=6.0', got %q", lines[0])
 	}
 }
 
@@ -51,7 +51,7 @@ func TestGenerateRequirementsTxt_CustomDeps(t *testing.T) {
 			"  pillow  ",
 			"",
 			"   ",
-			"django-silk>=0.5.0",
+			"django-silk>=0.6.0",
 		},
 	}
 
@@ -71,10 +71,10 @@ func TestGenerateRequirementsTxt_CustomDeps(t *testing.T) {
 
 	// TEST-GEN-02: Trimmed dependencies, no blank lines
 	expected := []string{
-		"Django>=5.0",
+		"Django>=6.0",
 		"djangorestframework",
 		"pillow",
-		"django-silk>=0.5.0",
+		"django-silk>=0.6.0",
 	}
 
 	if len(lines) != len(expected) {

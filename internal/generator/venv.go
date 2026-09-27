@@ -71,7 +71,7 @@ func GenerateRequirementsTxt(cfg *config.ProjectConfig) error {
 	reqPath := filepath.Join(cfg.OutputDir, "requirements.txt")
 	var lines []string
 
-	lines = append(lines, "Django>=5.0")
+	lines = append(lines, "Django>=6.0")
 	for _, dep := range cfg.Dependencies {
 		trimmed := strings.TrimSpace(dep)
 		if trimmed != "" {

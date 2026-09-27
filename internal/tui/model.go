@@ -128,6 +128,11 @@ func NewModel() Model {
 				Name:        "Django Debug Toolbar",
 				Description: "A configurable debug toolbar for Django",
 			},
+			{
+				ID:          "django-modeltranslation",
+				Name:        "Django ModelTranslation",
+				Description: "A configurable debug modeltranslation library for Django",
+			},
 		},
 		depCursor:  0,
 		depChecked: make(map[string]bool),
