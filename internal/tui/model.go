@@ -20,6 +20,7 @@ const (
 	StepProjectName Step = iota
 	StepDocker
 	StepDependencies
+	StepDataBase
 	StepConfirm
 	StepExecuting
 	StepDone
@@ -41,6 +42,11 @@ type DependencyOption struct {
 	Name        string
 }
 
+type DatabaseOption struct {
+	ID          string
+	Name        string
+}
+
 type Model struct {
 	step      Step
 	cfg       config.ProjectConfig
@@ -54,6 +60,7 @@ type Model struct {
 	dockerChoice int
 
 	depOptions []DependencyOption
+	dbOptions []DatabaseOption
 	depCursor  int
 	depChecked map[string]bool
 
@@ -129,6 +136,16 @@ func NewModel() Model {
 			{
 				ID:          "django-modeltranslation",
 				Name:        "Django ModelTranslation",
+			},
+		},
+		dbOptions: []DatabaseOption{
+			{
+				ID:          "postgresql",
+				Name:        "PostgreSQL",
+			},
+			{
+				ID:          "sqlite",
+				Name:        "Sqlite",
 			},
 		},
 		depCursor:  0,

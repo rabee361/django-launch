@@ -30,6 +30,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case StepDependencies:
 			return m.updateDependencies(msg)
+			
+		case StepDataBase:
+			return m.updateDataBases(msg)
 
 		case StepConfirm:
 			return m.updateConfirm(msg)
@@ -182,10 +185,48 @@ func (m Model) updateDependencies(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.depChecked[opt.ID] = !allSelected
 		}
 	case "enter":
-		m.step = StepConfirm
+		m.step = StepDataBase
 		return m, nil
 	case "esc", "backspace":
 		m.step = StepDocker
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) updateDataBases(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k":
+		if m.depCursor > 0 {
+			m.depCursor--
+		} else {
+			m.depCursor = len(m.dbOptions) - 1
+		}
+	case "down", "j":
+		if m.depCursor < len(m.dbOptions)-1 {
+			m.depCursor++
+		} else {
+			m.depCursor = 0
+		}
+	case "space", "x":
+		currentID := m.dbOptions[m.depCursor].ID
+		m.depChecked[currentID] = !m.depChecked[currentID]
+	case "a":
+		allSelected := true
+		for _, opt := range m.dbOptions {
+			if !m.depChecked[opt.ID] {
+				allSelected = false
+				break
+			}
+		}
+		for _, opt := range m.dbOptions {
+			m.depChecked[opt.ID] = !allSelected
+		}
+	case "enter":
+		m.step = StepConfirm
+		return m, nil
+	case "esc", "backspace":
+		m.step = StepDependencies
 		return m, nil
 	}
 	return m, nil
@@ -198,7 +239,7 @@ func (m Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmd := m.startGeneration()
 		return m, cmd
 	case "esc", "backspace", "b":
-		m.step = StepDependencies
+		m.step = StepDataBase
 		return m, nil
 	case "q", "n", "N":
 		return m, tea.Quit

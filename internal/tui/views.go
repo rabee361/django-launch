@@ -31,7 +31,7 @@ func (m Model) View() tea.View {
 	b.WriteString("\n\n")
 
 	base := strings.Count(b.String(), "\n")
-	nameRow, depRow := -1, -1
+	nameRow, depRow, dbRow := -1, -1, -1
 
 	switch m.step {
 	case StepProjectName:
@@ -44,6 +44,10 @@ func (m Model) View() tea.View {
 		s, row := m.viewDependencies()
 		b.WriteString(s)
 		depRow = base + row
+	case StepDataBase:
+		s, row := m.viewDatabases()
+		b.WriteString(s)
+		dbRow = base + row	
 	case StepConfirm:
 		b.WriteString(m.viewConfirm())
 	case StepExecuting:
@@ -72,6 +76,12 @@ func (m Model) View() tea.View {
 			c.Shape = tea.CursorBar
 			v.Cursor = c
 		}
+	case StepDataBase:
+		if dbRow >= 0 {
+			c := tea.NewCursor(0, depRow)
+			c.Shape = tea.CursorBar
+			v.Cursor = c
+		}
 	}
 	return v
 }
@@ -79,7 +89,7 @@ func (m Model) View() tea.View {
 func (m Model) viewProjectName() (string, int) {
 	var b strings.Builder
 
-	b.WriteString(stepBadgeStyle.Render("Step 1/4"))
+	b.WriteString(stepBadgeStyle.Render("Step 1/5"))
 	b.WriteString(stepHeaderStyle.Render("Project Name") + "\n\n")
 	b.WriteString("Enter the name for your Django project:\n\n")
 
@@ -97,7 +107,7 @@ func (m Model) viewProjectName() (string, int) {
 func (m Model) viewDocker() string {
 	var b strings.Builder
 
-	b.WriteString(stepBadgeStyle.Render("Step 2/4"))
+	b.WriteString(stepBadgeStyle.Render("Step 2/5"))
 	b.WriteString(stepHeaderStyle.Render("Docker Support") + "\n\n")
 	b.WriteString("Would you like to generate a Dockerfile and .dockerignore for this project?\n\n")
 
@@ -131,7 +141,7 @@ func (m Model) viewDocker() string {
 func (m Model) viewDependencies() (string, int) {
 	var b strings.Builder
 
-	b.WriteString(stepBadgeStyle.Render("Step 3/4"))
+	b.WriteString(stepBadgeStyle.Render("Step 3/5"))
 	b.WriteString(stepHeaderStyle.Render("Dependencies") + "\n\n")
 	b.WriteString("Select optional packages to install and configure alongside Django:\n\n")
 
@@ -163,10 +173,45 @@ func (m Model) viewDependencies() (string, int) {
 	return b.String(), row
 }
 
+func (m Model) viewDatabases() (string, int) {
+	var b strings.Builder
+
+	b.WriteString(stepBadgeStyle.Render("Step 4/5"))
+	b.WriteString(stepHeaderStyle.Render("Databases") + "\n\n")
+	b.WriteString("Select the Database you want to configure for your project:\n\n")
+
+	row := -1
+
+	for i, opt := range m.dbOptions {
+		if i == m.depCursor {
+			row = strings.Count(b.String(), "\n")
+		}
+
+		cursor := "  "
+		checkbox := uncheckedStyle.Render("[ ]")
+		style := unselectedItemStyle
+
+		if m.depChecked[opt.ID] {
+			checkbox = checkedStyle.Render("[✓]")
+		}
+
+		if m.depCursor == i {
+			cursor = selectedItemStyle.Render("▸ ")
+			style = selectedItemStyle
+		}
+
+		b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, style.Render(opt.Name)))
+	}
+
+	b.WriteString("\n")
+	b.WriteString(helpStyle.Render("↑/↓ or k/j: navigate • Space/x: toggle • a: toggle all • Enter: continue • Esc/Backspace: back"))
+	return b.String(), row
+}
+
 func (m Model) viewConfirm() string {
 	var b strings.Builder
 
-	b.WriteString(stepBadgeStyle.Render("Step 4/4"))
+	b.WriteString(stepBadgeStyle.Render("Step 5/5"))
 	b.WriteString(stepHeaderStyle.Render("Confirmation") + "\n\n")
 
 	dockerText := "No"
