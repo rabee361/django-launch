@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,17 +9,17 @@ import (
 	"regexp"
 	"strings"
 
-	"main/internal/config"
+	"github.com/rabee361/django-launch/internal/config"
 )
 
 // StartDjangoProject runs "python -m django startproject <name> ." inside the target directory.
-func StartDjangoProject(cfg *config.ProjectConfig) error {
+func StartDjangoProject(ctx context.Context, cfg *config.ProjectConfig) error {
 	pythonPath := GetVenvPython(cfg.OutputDir)
-	cmd := exec.Command(pythonPath, "-m", "django", "startproject", cfg.ProjectName, ".")
+	cmd := exec.CommandContext(ctx, pythonPath, "-m", "django", "startproject", cfg.ProjectName, ".")
 	cmd.Dir = cfg.OutputDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to run django startproject: %v, output: %s", err, string(out))
+		return fmt.Errorf("failed to run django startproject: %w, output: %s", err, string(out))
 	}
 	return nil
 }
@@ -97,7 +98,7 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) error {
 		}
 	}
 
-	// 3. MEDIA_URL and MEDIA_ROOT 
+	// 3. MEDIA_URL and MEDIA_ROOT
 	if cfg.HasDependency("pillow") {
 		mediaConfig := `
 # Media files (Uploaded files)
@@ -175,7 +176,7 @@ if settings.DEBUG:
 		content += mediaPatterns
 	}
 
-	// 5. Add debug tool bar config 
+	// 5. Add debug tool bar config
 	if cfg.HasDependency("django-debug-toolbar") {
 		mediaPatterns := `
 urlpatterns += debug_toolbar_urls()

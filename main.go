@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"main/internal/tui"
+	"github.com/rabee361/django-launch/internal/tui"
 )
 
 func main() {

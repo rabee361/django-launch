@@ -1,18 +1,22 @@
 package generator
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"main/internal/config"
+	"github.com/rabee361/django-launch/internal/config"
 )
 
 // ProgressCallback reports progress back to the UI.
 type ProgressCallback func(step int, total int, description string)
 
 // GenerateProject orchestrates the creation of the Django project.
-func GenerateProject(cfg *config.ProjectConfig, onProgress ProgressCallback) error {
+func GenerateProject(ctx context.Context, cfg *config.ProjectConfig, onProgress ProgressCallback) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	totalSteps := 5
 	if cfg.WithDocker {
 		totalSteps = 6
@@ -32,6 +36,9 @@ func GenerateProject(cfg *config.ProjectConfig, onProgress ProgressCallback) err
 	if onProgress != nil {
 		onProgress(currentStep, totalSteps, fmt.Sprintf("Creating project directory '%s'...", cfg.ProjectName))
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", cfg.OutputDir, err)
 	}
@@ -45,7 +52,7 @@ func GenerateProject(cfg *config.ProjectConfig, onProgress ProgressCallback) err
 	if onProgress != nil {
 		onProgress(currentStep, totalSteps, fmt.Sprintf("Creating virtual environment (.venv) using %s...", toolName))
 	}
-	if err := CreateVirtualEnv(cfg); err != nil {
+	if err := CreateVirtualEnv(ctx, cfg); err != nil {
 		return err
 	}
 	currentStep++
@@ -54,10 +61,13 @@ func GenerateProject(cfg *config.ProjectConfig, onProgress ProgressCallback) err
 	if onProgress != nil {
 		onProgress(currentStep, totalSteps, "Writing requirements.txt and installing dependencies...")
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := GenerateRequirementsTxt(cfg); err != nil {
 		return fmt.Errorf("failed to create requirements.txt: %w", err)
 	}
-	if err := InstallDependencies(cfg); err != nil {
+	if err := InstallDependencies(ctx, cfg); err != nil {
 		return err
 	}
 	currentStep++
@@ -66,7 +76,7 @@ func GenerateProject(cfg *config.ProjectConfig, onProgress ProgressCallback) err
 	if onProgress != nil {
 		onProgress(currentStep, totalSteps, fmt.Sprintf("Initializing Django project '%s'...", cfg.ProjectName))
 	}
-	if err := StartDjangoProject(cfg); err != nil {
+	if err := StartDjangoProject(ctx, cfg); err != nil {
 		return err
 	}
 	currentStep++
@@ -74,6 +84,9 @@ func GenerateProject(cfg *config.ProjectConfig, onProgress ProgressCallback) err
 	// 5. Deep scaffold settings and urls
 	if onProgress != nil {
 		onProgress(currentStep, totalSteps, "Scaffolding settings.py and urls.py with chosen dependencies...")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 	if err := ScaffoldSettingsAndUrls(cfg); err != nil {
 		return err
@@ -85,11 +98,17 @@ func GenerateProject(cfg *config.ProjectConfig, onProgress ProgressCallback) err
 		if onProgress != nil {
 			onProgress(currentStep, totalSteps, "Generating Dockerfile and .dockerignore...")
 		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := GenerateDockerFiles(cfg); err != nil {
 			return fmt.Errorf("failed to generate Docker files: %w", err)
 		}
 		currentStep++
 	}
 
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return nil
 }

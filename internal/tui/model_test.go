@@ -152,11 +152,21 @@ func TestNewModel(t *testing.T) {
 		t.Errorf("TEST-TUI-06: expected default dockerChoice to be 0 (Yes), got %d", m.dockerChoice)
 	}
 
-	if len(m.depOptions) != 4 {
-		t.Errorf("TEST-TUI-06: expected 4 dependency options, got %d", len(m.depOptions))
+	if len(m.depOptions) != 9 {
+		t.Errorf("TEST-TUI-06: expected 9 dependency options, got %d", len(m.depOptions))
 	}
 
-	expectedIDs := []string{"djangorestframework", "pillow", "django-silk", "djangorestframework-simplejwt","django-cors-headers", "django-debug-toolbar","django-filter"}
+	expectedIDs := []string{
+		"djangorestframework",
+		"pillow",
+		"django-silk",
+		"djangorestframework-simplejwt",
+		"django-filter",
+		"django-cors-headers",
+		"django-environ",
+		"django-debug-toolbar",
+		"django-modeltranslation",
+	}
 	for i, id := range expectedIDs {
 		if m.depOptions[i].ID != id {
 			t.Errorf("TEST-TUI-06: depOption[%d] expected ID %q, got %q", i, id, m.depOptions[i].ID)

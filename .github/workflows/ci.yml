@@ -1,0 +1,113 @@
+# CI for django-launch.
+#
+# The automatic triggers below are commented out, so this workflow does not run
+# on push or on pull request yet. It stays valid YAML with workflow_dispatch
+# only, which means you can click "Run workflow" in the Actions tab to test it
+# before turning it on for real.
+#
+# Leaving a workflow file with every line commented out would make GitHub
+# reject it as an invalid workflow, which is why a minimal valid skeleton is
+# kept here instead.
+
+name: ci
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  # pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # reads the go directive from go.mod, so the version in the
+          # workflow can never drift from the version the project declares
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        # fails the build on unformatted files instead of silently fixing
+        # them, because a CI that rewrites files cannot gate a pull request
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "these files are not gofmt clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go mod tidy -diff
+        # fails if go.mod or go.sum would change, which catches a dependency
+        # edit that was never tidied before it reaches anyone else
+        run: go mod tidy -diff
+
+      - name: build
+        run: go build ./...
+
+      # golangci-lint is intentionally not wired in yet. It needs a pinned
+      # .golangci.yml first, otherwise a new linter release changes the rules
+      # and reddens CI on a day when no code changed. Add the config, then
+      # add:
+      #   - uses: golangci/golangci-lint-action@v6
+      #     with:
+      #       version: v1.64
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # three operating systems because the code branches on runtime.GOOS
+        # for the activate command on the done screen, and because the
+        # generator resolves pip and python paths differently on Windows
+        # (.venv\Scripts\pip.exe against .venv/bin/pip)
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # the end-to-end test builds a real Django project in a temp directory.
+      # it needs network access and a python or uv on the runner image, which
+      # all three images ship. if that ever changes, add
+      # actions/setup-python here.
+      - name: test with race detector
+        if: runner.os != 'Windows'
+        run: go test -count=1 -race -coverprofile=coverage.out ./...
+
+      # the race detector links against cgo, and the Windows runners have no
+      # gcc in PATH, so Windows runs the suite without -race
+      - name: test
+        if: runner.os == 'Windows'
+        run: go test -count=1 ./...
+
+      - name: coverage summary
+        if: runner.os != 'Windows'
+        shell: bash
+        run: go tool cover -func=coverage.out | tail -n 1

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"main/internal/config"
+	"github.com/rabee361/django-launch/internal/config"
 )
 
 const sampleSettingsPy = `

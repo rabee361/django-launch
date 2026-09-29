@@ -1,13 +1,16 @@
 package generator
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
-	"main/internal/config"
+	"github.com/rabee361/django-launch/internal/config"
 )
 
 func TestGenerateProject_DefaultOutputDir(t *testing.T) {
@@ -27,7 +30,7 @@ func TestGenerateProject_DefaultOutputDir(t *testing.T) {
 	defer os.RemoveAll(expectedOutputDir)
 
 	// Will fail at step 2 (creating venv) because PythonCmd is fake
-	_ = GenerateProject(&cfg, nil)
+	_ = GenerateProject(context.Background(), &cfg, nil)
 
 	if cfg.OutputDir != expectedOutputDir {
 		t.Errorf("TEST-GEN-20: expected cfg.OutputDir to be set to %q, got %q", expectedOutputDir, cfg.OutputDir)
@@ -53,7 +56,7 @@ func TestGenerateProject_InvalidDirError(t *testing.T) {
 		OutputDir:   impossibleDir,
 	}
 
-	err = GenerateProject(&cfg, nil)
+	err = GenerateProject(context.Background(), &cfg, nil)
 	if err == nil {
 		t.Errorf("TEST-GEN-21: expected error when creating directory inside a regular file, got nil")
 	}
@@ -83,7 +86,7 @@ func TestGenerateProjectEndToEnd(t *testing.T) {
 		ProjectName:  projectName,
 		OutputDir:    projectDir,
 		WithDocker:   true,
-		Dependencies: []string{"pillow", "django-silk", "djangorestframework-simplejwt","django-filter","django-cors-headers","django-environ","django-debug-toolbar"},
+		Dependencies: []string{"djangorestframework", "pillow", "django-silk", "djangorestframework-simplejwt", "django-filter", "django-cors-headers", "django-environ", "django-debug-toolbar"},
 		UseUv:        hasUv,
 		PythonCmd:    pyCmd,
 	}
@@ -91,7 +94,7 @@ func TestGenerateProjectEndToEnd(t *testing.T) {
 	var recordedSteps []int
 	var recordedTotals []int
 
-	err = GenerateProject(&cfg, func(step, total int, desc string) {
+	err = GenerateProject(context.Background(), &cfg, func(step, total int, desc string) {
 		recordedSteps = append(recordedSteps, step)
 		recordedTotals = append(recordedTotals, total)
 		t.Logf("[%d/%d] %s", step, total, desc)
@@ -171,4 +174,31 @@ func TestGenerateProjectEndToEnd(t *testing.T) {
 		t.Fatalf("django check failed: %v, output:\n%s", err, string(out))
 	}
 	t.Logf("Django check passed:\n%s", string(out))
+}
+
+func TestGenerateProject_CancelledContext(t *testing.T) {
+	// TEST-GEN-23: a context cancelled before the call stops the run immediately
+	hasUv, pyCmd, err := DetectTooling()
+	if err != nil {
+		t.Skip("neither uv nor python is available")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	cfg := config.ProjectConfig{
+		ProjectName: "cancelled_context_proj",
+		OutputDir:   t.TempDir(),
+		UseUv:       hasUv,
+		PythonCmd:   pyCmd,
+	}
+
+	start := time.Now()
+	got := GenerateProject(ctx, &cfg, nil)
+	if !errors.Is(got, context.Canceled) {
+		t.Errorf("TEST-GEN-23: expected context.Canceled, got %v", got)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("TEST-GEN-23: expected a quick return, took %v", elapsed)
+	}
 }

@@ -1,11 +1,10 @@
 package tui
 
-import 	"charm.land/lipgloss/v2"
+import "charm.land/lipgloss/v2"
 
 var (
 	primaryColor   = lipgloss.Color("#00D787")
 	secondaryColor = lipgloss.Color("#00AFFF")
-	accentColor    = lipgloss.Color("#FF79C6")
 	mutedColor     = lipgloss.Color("#6272A4")
 	errorColor     = lipgloss.Color("#FF5555")
 	darkBg         = lipgloss.Color("#1E1E2E")

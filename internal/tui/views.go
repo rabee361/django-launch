@@ -2,10 +2,8 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"runtime"
 	"strings"
-	"os"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -14,22 +12,38 @@ import (
 func (m Model) View() tea.View {
 	var b strings.Builder
 
-	content, err := os.ReadFile("ascii_art.txt")
-	if err != nil {
-		content = []byte("  DJANGO LAUNCH")
-	}
-
-	// Header Banner
-	b.WriteString(titleStyle.Render(string(content)))
+	bannerArt := `
+██████╗      ██╗ █████╗ ███╗   ██╗ ██████╗  ██████╗ 
+██╔══██╗     ██║██╔══██╗████╗  ██║██╔════╝ ██╔═══██╗
+██║  ██║     ██║███████║██╔██╗ ██║██║  ███╗██║   ██║
+██║  ██║██   ██║██╔══██║██║╚██╗██║██║   ██║██║   ██║
+██████╔╝╚█████╔╝██║  ██║██║ ╚████║╚██████╔╝╚██████╔╝
+╚═════╝  ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ 
+                                                    
+██╗      █████╗ ██╗   ██╗███╗   ██╗ ██████╗██╗  ██╗ 
+██║     ██╔══██╗██║   ██║████╗  ██║██╔════╝██║  ██║ 
+██║     ███████║██║   ██║██╔██╗ ██║██║     ███████║ 
+██║     ██╔══██║██║   ██║██║╚██╗██║██║     ██╔══██║ 
+███████╗██║  ██║╚██████╔╝██║ ╚████║╚██████╗██║  ██║ 
+╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝╚═╝  ╚═╝ 
+`
+	b.WriteString(titleStyle.Render(string(bannerArt)))
 	b.WriteString("\n\n")
+
+	base := strings.Count(b.String(), "\n")
+	nameRow, depRow := -1, -1
 
 	switch m.step {
 	case StepProjectName:
-		b.WriteString(m.viewProjectName())
+		s, row := m.viewProjectName()
+		b.WriteString(s)
+		nameRow = base + row
 	case StepDocker:
 		b.WriteString(m.viewDocker())
 	case StepDependencies:
-		b.WriteString(m.viewDependencies())
+		s, row := m.viewDependencies()
+		b.WriteString(s)
+		depRow = base + row
 	case StepConfirm:
 		b.WriteString(m.viewConfirm())
 	case StepExecuting:
@@ -40,25 +54,44 @@ func (m Model) View() tea.View {
 		b.WriteString(m.viewError())
 	}
 
-	v := tea.NewView(b.String())
+	frame := b.String()
+	if m.width > 0 {
+		frame = clipLines(frame, m.width)
+	}
 
+	v := tea.NewView(frame)
+	switch m.step {
+	case StepProjectName:
+		if c := m.textInput.Cursor(); c != nil {
+			c.Y = nameRow
+			v.Cursor = c
+		}
+	case StepDependencies:
+		if depRow >= 0 {
+			c := tea.NewCursor(0, depRow)
+			c.Shape = tea.CursorBar
+			v.Cursor = c
+		}
+	}
 	return v
 }
 
-func (m Model) viewProjectName() string {
+func (m Model) viewProjectName() (string, int) {
 	var b strings.Builder
 
 	b.WriteString(stepBadgeStyle.Render("Step 1/4"))
 	b.WriteString(stepHeaderStyle.Render("Project Name") + "\n\n")
 	b.WriteString("Enter the name for your Django project:\n\n")
+
+	row := strings.Count(b.String(), "\n")
 	b.WriteString(m.textInput.View() + "\n\n")
 
 	if m.nameError != "" {
 		b.WriteString(errorAlertStyle.Render("✗ "+m.nameError) + "\n\n")
 	}
 
-	b.WriteString(helpStyle.Render("Enter: continue • Ctrl+C: quit"))
-	return b.String()
+	b.WriteString(helpStyle.Render("Type or paste • Enter: continue • Ctrl+C: quit"))
+	return b.String(), row
 }
 
 func (m Model) viewDocker() string {
@@ -91,18 +124,24 @@ func (m Model) viewDocker() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("↑/↓ or y/n: select • Enter: continue • Esc: back"))
+	b.WriteString(helpStyle.Render("↑/↓/←/→ or hjkl: choose • y/n: choose and continue • Enter: continue • Esc/Backspace: back"))
 	return b.String()
 }
 
-func (m Model) viewDependencies() string {
+func (m Model) viewDependencies() (string, int) {
 	var b strings.Builder
 
 	b.WriteString(stepBadgeStyle.Render("Step 3/4"))
 	b.WriteString(stepHeaderStyle.Render("Dependencies") + "\n\n")
 	b.WriteString("Select optional packages to install and configure alongside Django:\n\n")
 
+	row := -1
+
 	for i, opt := range m.depOptions {
+		if i == m.depCursor {
+			row = strings.Count(b.String(), "\n")
+		}
+
 		cursor := "  "
 		checkbox := uncheckedStyle.Render("[ ]")
 		style := unselectedItemStyle
@@ -117,12 +156,11 @@ func (m Model) viewDependencies() string {
 		}
 
 		b.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, style.Render(opt.Name)))
-		b.WriteString(fmt.Sprintf("      %s\n", subtitleStyle.Render(opt.Description)))
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("↑/↓: navigate • Space: toggle • 'a': toggle all • Enter: continue • Esc: back"))
-	return b.String()
+	b.WriteString(helpStyle.Render("↑/↓ or k/j: navigate • Space/x: toggle • a: toggle all • Enter: continue • Esc/Backspace: back"))
+	return b.String(), row
 }
 
 func (m Model) viewConfirm() string {
@@ -161,10 +199,10 @@ func (m Model) viewConfirm() string {
 		secondaryColorStyle(toolText),
 	)
 
-	b.WriteString(cardStyle.Render(cardContent) + "\n\n")
-	b.WriteString(focusedPromptStyle.Render("Ready to generate your project? Press [Enter] to proceed, [Esc] to go back."))
+	b.WriteString(cardStyle.MaxWidth(m.width).Render(cardContent) + "\n\n")
+	b.WriteString(focusedPromptStyle.Render("Ready to generate your project? Press [Enter] to start, [Esc] to go back, [q] to cancel."))
 	b.WriteString("\n\n")
-	b.WriteString(helpStyle.Render("Enter: start • Esc: back • q: cancel"))
+	b.WriteString(helpStyle.Render("Enter/y: start • Esc/Backspace/b: back • q/n: cancel"))
 	return b.String()
 }
 
@@ -179,11 +217,15 @@ func (m Model) viewExecuting() string {
 	}
 
 	if m.currentTask != "" {
-		b.WriteString(fmt.Sprintf("%s %s\n", m.spinner.View(), m.currentTask))
+		task := m.currentTask
+		if m.progressTotal > 0 {
+			task = fmt.Sprintf("%s (%d/%d)", task, m.progressStep, m.progressTotal)
+		}
+		b.WriteString(fmt.Sprintf("%s %s\n", m.spinner.View(), task))
 	}
 
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("Please wait while your project environment and files are configured..."))
+	b.WriteString(helpStyle.Render("q/n/esc: cancel • Please wait while your project environment and files are configured..."))
 	return b.String()
 }
 
@@ -214,7 +256,7 @@ func (m Model) viewDone() string {
 	)
 
 	b.WriteString(cardStyle.Render(instructions) + "\n\n")
-	b.WriteString(helpStyle.Render("Press Enter or 'q' to exit."))
+	b.WriteString(helpStyle.Render("Press Enter, q, or Esc to exit."))
 	return b.String()
 }
 
@@ -228,7 +270,7 @@ func (m Model) viewError() string {
 	}
 
 	b.WriteString(cardStyle.BorderForeground(errorColor).Render(errMsg) + "\n\n")
-	b.WriteString(helpStyle.Render("Press Enter or 'q' to exit."))
+	b.WriteString(helpStyle.Render("Press Enter, q, or Esc to exit."))
 	return b.String()
 }
 
@@ -236,10 +278,11 @@ func secondaryColorStyle(s string) string {
 	return lipgloss.NewStyle().Foreground(secondaryColor).Render(s)
 }
 
-func filepathRel(path string) string {
-	rel, err := filepath.Rel(".", path)
-	if err != nil {
-		return path
+func clipLines(s string, width int) string {
+	lines := strings.Split(s, "\n")
+	style := lipgloss.NewStyle().MaxWidth(width)
+	for i := range lines {
+		lines[i] = style.Render(lines[i])
 	}
-	return rel
+	return strings.Join(lines, "\n")
 }

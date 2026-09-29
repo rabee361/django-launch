@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -9,8 +10,8 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"main/internal/config"
-	"main/internal/generator"
+	"github.com/rabee361/django-launch/internal/config"
+	"github.com/rabee361/django-launch/internal/generator"
 )
 
 type Step int
@@ -38,7 +39,6 @@ type doneMsg struct {
 type DependencyOption struct {
 	ID          string
 	Name        string
-	Description string
 }
 
 type Model struct {
@@ -47,6 +47,7 @@ type Model struct {
 	textInput textinput.Model
 	spinner   spinner.Model
 	err       error
+	width     int
 
 	nameError string
 
@@ -59,6 +60,9 @@ type Model struct {
 	progressSub   chan tea.Msg
 	progressItems []string
 	currentTask   string
+	progressStep  int
+	progressTotal int
+	cancelGen     context.CancelFunc
 
 	hasUv     bool
 	pythonCmd string
@@ -66,12 +70,14 @@ type Model struct {
 
 func NewModel() Model {
 	ti := textinput.New()
-	ti.Placeholder = "my_django_app"
+	ti.Placeholder = "my_amazing_django_project"
+	ti.SetVirtualCursor(false)
 	ti.Focus()
 	ti.CharLimit = 50
+	ti.SetWidth(50)
 
 	s := spinner.New()
-	s.Spinner = spinner.Dot
+	s.Spinner = spinner.Moon
 	s.Style = focusedPromptStyle
 
 	hasUv, pyCmd, _ := generator.DetectTooling()
@@ -91,47 +97,38 @@ func NewModel() Model {
 			{
 				ID:          "djangorestframework",
 				Name:        "Django REST Framework",
-				Description: "Powerful and flexible toolkit for building Web APIs",
 			},
 			{
 				ID:          "pillow",
 				Name:        "Pillow",
-				Description: "Python Imaging Library (required for ImageField & media)",
 			},
 			{
 				ID:          "django-silk",
 				Name:        "Django Silk",
-				Description: "Silky-smooth profiling and SQL query inspection",
 			},
 			{
 				ID:          "djangorestframework-simplejwt",
 				Name:        "Django REST Framework Simple JWT",
-				Description: "Simple JWT authentication for Django REST Framework",
 			},
 			{
 				ID:          "django-filter",
 				Name:        "Django Filters",
-				Description: "Django filtering library",
 			},
 			{
 				ID:          "django-cors-headers",
 				Name:        "Django CORS Headers",
-				Description: "CORS headers for Django",
 			},
 			{
 				ID:          "django-environ",
 				Name:        "Django Environ",
-				Description: "Environment variable management for Django",
 			},
 			{
 				ID:          "django-debug-toolbar",
 				Name:        "Django Debug Toolbar",
-				Description: "A configurable debug toolbar for Django",
 			},
 			{
 				ID:          "django-modeltranslation",
 				Name:        "Django ModelTranslation",
-				Description: "A configurable debug modeltranslation library for Django",
 			},
 		},
 		depCursor:  0,
@@ -181,21 +178,38 @@ func (m *Model) startGeneration() tea.Cmd {
 	sub := m.progressSub
 	cfgCopy := m.cfg
 
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelGen = cancel
+
 	go func() {
-		err := generator.GenerateProject(&cfgCopy, func(step, total int, desc string) {
-			sub <- progressMsg{
+		err := generator.GenerateProject(ctx, &cfgCopy, func(step, total int, desc string) {
+			sendProgress(ctx, sub, progressMsg{
 				step:  step,
 				total: total,
 				text:  desc,
-			}
+			})
 		})
-		sub <- doneMsg{err: err}
+		sendProgress(ctx, sub, doneMsg{err: err})
 	}()
 
 	return tea.Batch(
 		m.spinner.Tick,
 		waitForActivity(m.progressSub),
 	)
+}
+
+func sendProgress(ctx context.Context, sub chan tea.Msg, msg tea.Msg) {
+	select {
+	case sub <- msg:
+	case <-ctx.Done():
+	}
+}
+
+func (m *Model) clearProgress() {
+	m.progressItems = nil
+	m.currentTask = ""
+	m.progressStep = 0
+	m.progressTotal = 0
 }
 
 func waitForActivity(sub chan tea.Msg) tea.Cmd {

@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"main/internal/config"
+	"github.com/rabee361/django-launch/internal/config"
 )
 
 const dockerfileTemplate = `# Use official lightweight Python image

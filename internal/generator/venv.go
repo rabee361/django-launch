@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,7 +9,7 @@ import (
 	"runtime"
 	"strings"
 
-	"main/internal/config"
+	"github.com/rabee361/django-launch/internal/config"
 )
 
 // DetectTooling checks if uv and python are available on the machine.
@@ -49,19 +50,19 @@ func GetVenvPip(targetDir string) string {
 }
 
 // CreateVirtualEnv creates the .venv directory inside targetDir.
-func CreateVirtualEnv(cfg *config.ProjectConfig) error {
+func CreateVirtualEnv(ctx context.Context, cfg *config.ProjectConfig) error {
 	var cmd *exec.Cmd
 
 	if cfg.UseUv {
-		cmd = exec.Command("uv", "venv", ".venv")
+		cmd = exec.CommandContext(ctx, "uv", "venv", ".venv")
 	} else {
-		cmd = exec.Command(cfg.PythonCmd, "-m", "venv", ".venv")
+		cmd = exec.CommandContext(ctx, cfg.PythonCmd, "-m", "venv", ".venv")
 	}
 
 	cmd.Dir = cfg.OutputDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to create virtual environment: %v, output: %s", err, string(out))
+		return fmt.Errorf("failed to create virtual environment: %w, output: %s", err, string(out))
 	}
 	return nil
 }
@@ -84,26 +85,26 @@ func GenerateRequirementsTxt(cfg *config.ProjectConfig) error {
 }
 
 // InstallDependencies installs requirements.txt inside the .venv.
-func InstallDependencies(cfg *config.ProjectConfig) error {
+func InstallDependencies(ctx context.Context, cfg *config.ProjectConfig) error {
 	var cmd *exec.Cmd
 
 	if cfg.UseUv {
-		cmd = exec.Command("uv", "pip", "install", "-r", "requirements.txt", "--python", ".venv")
+		cmd = exec.CommandContext(ctx, "uv", "pip", "install", "-r", "requirements.txt", "--python", ".venv")
 	} else {
 		pipPath := GetVenvPip(cfg.OutputDir)
 		if _, err := os.Stat(pipPath); err == nil {
-			cmd = exec.Command(pipPath, "install", "-r", "requirements.txt")
+			cmd = exec.CommandContext(ctx, pipPath, "install", "-r", "requirements.txt")
 		} else {
 			// Fallback: run python -m pip
 			pythonPath := GetVenvPython(cfg.OutputDir)
-			cmd = exec.Command(pythonPath, "-m", "pip", "install", "-r", "requirements.txt")
+			cmd = exec.CommandContext(ctx, pythonPath, "-m", "pip", "install", "-r", "requirements.txt")
 		}
 	}
 
 	cmd.Dir = cfg.OutputDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to install dependencies: %v, output: %s", err, string(out))
+		return fmt.Errorf("failed to install dependencies: %w, output: %s", err, string(out))
 	}
 	return nil
 }
