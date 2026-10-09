@@ -1,0 +1,28 @@
+# build output
+/django-launch
+*.exe
+*.test
+*.prof
+
+# coverage
+coverage.out
+coverage.html
+
+# python environments (generated projects and local venvs)
+.venv/
+venv/
+env/
+.env/
+__pycache__/
+*.pyc
+
+# tool output
+dist/
+go.work
+go.work.sum
+
+# editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
