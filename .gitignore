@@ -21,6 +21,11 @@ dist/
 go.work
 go.work.sum
 
+# python packaging
+build/
+*.egg-info/
+src/django_launch/_bin/
+
 # editors and OS
 .idea/
 .vscode/

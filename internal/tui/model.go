@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-
+	"slices"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -38,13 +38,21 @@ type doneMsg struct {
 }
 
 type DependencyOption struct {
-	ID   string
-	Name string
+	ID          string
+	Name        string
+	Description string
 }
 
 type DatabaseOption struct {
-	ID   string
-	Name string
+	ID          string
+	Name        string
+	Description string
+}
+
+type MailerOption struct {
+	ID          string
+	Name        string
+	Description string
 }
 
 type Model struct {
@@ -54,15 +62,17 @@ type Model struct {
 	spinner   spinner.Model
 	err       error
 	width     int
+	height    int
 
 	nameError string
 
 	dockerChoice int
 
-	depOptions []DependencyOption
-	dbOptions  []DatabaseOption
-	depCursor  int
-	depChecked map[string]bool
+	depOptions    []DependencyOption
+	dbOptions     []DatabaseOption
+	depCursor     int
+	dbCursor      int
+	depChecked    map[string]bool
 
 	progressSub   chan tea.Msg
 	progressItems []string
@@ -102,54 +112,66 @@ func NewModel() Model {
 		dockerChoice: 0,
 		depOptions: []DependencyOption{
 			{
-				ID:   "djangorestframework",
-				Name: "Django REST Framework",
+				ID:          "djangorestframework",
+				Name:        "Django REST Framework",
+				Description: "Toolkit for building Web APIs",
 			},
 			{
-				ID:   "pillow",
-				Name: "Pillow",
+				ID:          "pillow",
+				Name:        "Pillow",
+				Description: "Python Imaging Library (required for ImageField & media)",
 			},
 			{
-				ID:   "django-silk",
-				Name: "Django Silk",
+				ID:          "django-silk",
+				Name:        "Django Silk",
+				Description: "Profiling and SQL query inspection",
 			},
 			{
-				ID:   "djangorestframework-simplejwt",
-				Name: "Django REST Framework Simple JWT",
+				ID:          "djangorestframework-simplejwt",
+				Name:        "Django REST Framework Simple JWT",
+				Description: "Token authentication for the REST framework",
 			},
 			{
-				ID:   "django-filter",
-				Name: "Django Filters",
+				ID:          "django-filter",
+				Name:        "Django Filters",
+				Description: "Filtering for API views",
 			},
 			{
-				ID:   "django-cors-headers",
-				Name: "Django CORS Headers",
+				ID:          "django-cors-headers",
+				Name:        "Django CORS Headers",
+				Description: "CORS response headers",
 			},
 			{
-				ID:   "django-environ",
-				Name: "Django Environ",
+				ID:          "django-environ",
+				Name:        "Django Environ",
+				Description: "Environment variable handling with .env support",
 			},
 			{
-				ID:   "django-debug-toolbar",
-				Name: "Django Debug Toolbar",
+				ID:          "django-debug-toolbar",
+				Name:        "Django Debug Toolbar",
+				Description: "Debug panels during development",
 			},
 			{
-				ID:   "django-modeltranslation",
-				Name: "Django ModelTranslation",
+				ID:          "django-modeltranslation",
+				Name:        "Django ModelTranslation",
+				Description: "Translated model fields",
 			},
 		},
 		dbOptions: []DatabaseOption{
 			{
-				ID:   "postgresql",
-				Name: "PostgreSQL",
+				ID:          "postgresql",
+				Name:        "PostgreSQL",
+				Description: "Full-featured relational database (psycopg is installed for you)",
 			},
 			{
-				ID:   "sqlite",
-				Name: "Sqlite",
+				ID:          "sqlite",
+				Name:        "Sqlite",
+				Description: "File-based zero-configuration database",
 			},
 		},
-		depCursor:  0,
-		depChecked: make(map[string]bool),
+		depCursor:    0,
+		dbCursor:     0,
+		depChecked:   make(map[string]bool),
 	}
 
 	return m
@@ -189,19 +211,22 @@ func (m *Model) startGeneration() tea.Cmd {
 			deps = append(deps, opt.ID)
 		}
 	}
-	m.cfg.Dependencies = deps
 
 	var dbs []string
-	for _, opt := range m.depOptions {
+	for _, opt := range m.dbOptions {
 		if m.depChecked[opt.ID] {
 			dbs = append(dbs, opt.ID)
 		}
 	}
+
+	m.cfg.Dependencies = deps
 	m.cfg.Databases = dbs
 	m.cfg.WithDocker = (m.dockerChoice == 0)
 
 	sub := m.progressSub
 	cfgCopy := m.cfg
+	cfgCopy.Dependencies = slices.Clone(deps)
+	cfgCopy.Databases = slices.Clone(dbs)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelGen = cancel

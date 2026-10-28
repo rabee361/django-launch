@@ -18,8 +18,7 @@ func (m Model) View() tea.View {
 ██║  ██║     ██║███████║██╔██╗ ██║██║  ███╗██║   ██║
 ██║  ██║██   ██║██╔══██║██║╚██╗██║██║   ██║██║   ██║
 ██████╔╝╚█████╔╝██║  ██║██║ ╚████║╚██████╔╝╚██████╔╝
-╚═════╝  ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ 
-                                                    
+╚═════╝  ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝                                          
 ██╗      █████╗ ██╗   ██╗███╗   ██╗ ██████╗██╗  ██╗ 
 ██║     ██╔══██╗██║   ██║████╗  ██║██╔════╝██║  ██║ 
 ██║     ███████║██║   ██║██╔██╗ ██║██║     ███████║ 
@@ -28,7 +27,7 @@ func (m Model) View() tea.View {
 ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝╚═╝  ╚═╝ 
 `
 	str_builder.WriteString(titleStyle.Render(string(bannerArt)))
-	str_builder.WriteString("\n\n")
+	str_builder.WriteString("\n")
 
 	base := strings.Count(str_builder.String(), "\n")
 	nameRow, depRow, dbRow := -1, -1, -1
@@ -64,6 +63,9 @@ func (m Model) View() tea.View {
 	}
 
 	v := tea.NewView(frame)
+	v.AltScreen = true
+    v.MouseMode = tea.MouseModeCellMotion
+
 	switch m.step {
 	case StepProjectName:
 		if c := m.textInput.Cursor(); c != nil {
