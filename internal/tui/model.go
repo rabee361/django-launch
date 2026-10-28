@@ -365,12 +365,3 @@ func (m Model) nextStepsText() string {
 		activateCmd,
 	)
 }
-
-// NextSteps returns the post-generation instructions so main can print them
-// into the scrollback after the program exits. Empty unless the run completed.
-func (m Model) NextSteps() string {
-	if m.step != StepDone {
-		return ""
-	}
-	return m.nextStepsText()
-}

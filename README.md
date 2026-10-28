@@ -25,7 +25,7 @@ A terminal wizard that scaffolds a Django project. Answer seven questions and it
 └── .dockerignore
 ```
 
-The project is created in place. The tool does not run `migrate` or `runserver`; the final screen prints those commands, and they are also written back into your scrollback when the app exits.
+The project is created in place. The tool does not run `migrate` or `runserver`; the final screen prints those commands.
 
 ## requirements
 
@@ -42,7 +42,7 @@ go build -o django-launch
 
 On Windows the binary is `django-launch.exe`. Run it from the directory where you want the project folder to appear, since it creates `./<project name>`.
 
-The wizard runs in the alternate screen. The ASCII banner renders in full when it fits the terminal and shrinks to a one-line title on short terminals so nothing gets clipped. After a successful run the next-steps block is printed into the scrollback.
+The wizard runs in the alternate screen. The ASCII banner renders in full when it fits the terminal and shrinks to a one-line title on short terminals so nothing gets clipped.
 
 ## the seven steps
 
