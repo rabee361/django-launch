@@ -181,11 +181,11 @@ func TestUpdate_StepDependencies(t *testing.T) {
 		}
 	}
 
-	// TEST-TUI-12: Enter advances to StepConfirm
+	// TEST-TUI-12: Enter advances to StepDataBase
 	updatedModel, _ = m.Update(specialKey(tea.KeyEnter))
 	m = updatedModel.(Model)
-	if m.step != StepConfirm {
-		t.Errorf("TEST-TUI-12: expected StepConfirm after Enter, got %v", m.step)
+	if m.step != StepDataBase {
+		t.Errorf("TEST-TUI-12: expected StepDataBase after Enter, got %v", m.step)
 	}
 
 	// Esc returns to StepDocker
@@ -203,19 +203,19 @@ func TestUpdate_StepConfirm(t *testing.T) {
 	m.step = StepConfirm
 	m.cfg.ProjectName = "my_app"
 
-	// Esc returns to StepDependencies
+	// Esc returns to StepTemplates
 	updatedModel, _ := m.Update(specialKey(tea.KeyEsc))
 	m = updatedModel.(Model)
-	if m.step != StepDependencies {
-		t.Errorf("TEST-TUI-13: expected StepDependencies after Esc, got %v", m.step)
+	if m.step != StepTemplates {
+		t.Errorf("TEST-TUI-13: expected StepTemplates after Esc, got %v", m.step)
 	}
 
-	// 'b' also returns to StepDependencies
+	// 'b' also returns to StepTemplates
 	m.step = StepConfirm
 	updatedModel, _ = m.Update(keyMsg('b', "b"))
 	m = updatedModel.(Model)
-	if m.step != StepDependencies {
-		t.Errorf("TEST-TUI-13: expected StepDependencies after 'b', got %v", m.step)
+	if m.step != StepTemplates {
+		t.Errorf("TEST-TUI-13: expected StepTemplates after 'b', got %v", m.step)
 	}
 
 	// 'q' quits
@@ -230,6 +230,194 @@ func TestUpdate_StepConfirm(t *testing.T) {
 	_, cmd = m.Update(keyMsg('n', "n"))
 	if cmd == nil {
 		t.Errorf("TEST-TUI-13: expected tea.Quit command after 'n', got nil")
+	}
+}
+
+func TestUpdate_StepDataBases(t *testing.T) {
+	m := NewModel()
+	m.step = StepDataBase
+
+	// TEST-TUI-28: dbCursor navigation and toggle use the database list
+	if m.dbCursor != 0 {
+		t.Fatalf("expected initial dbCursor = 0, got %d", m.dbCursor)
+	}
+
+	updatedModel, _ := m.Update(specialKey(tea.KeyDown))
+	m = updatedModel.(Model)
+	if m.dbCursor != 1 {
+		t.Errorf("expected dbCursor = 1 after KeyDown, got %d", m.dbCursor)
+	}
+
+	targetID := m.dbOptions[m.dbCursor].ID
+	updatedModel, _ = m.Update(specialKey(tea.KeySpace))
+	m = updatedModel.(Model)
+	if !m.depChecked[targetID] {
+		t.Errorf("expected %q checked after Space, got %v", targetID, m.depChecked)
+	}
+
+	// Wrap around
+	updatedModel, _ = m.Update(specialKey(tea.KeyDown))
+	m = updatedModel.(Model)
+	if m.dbCursor != 0 {
+		t.Errorf("expected dbCursor to wrap to 0, got %d", m.dbCursor)
+	}
+	updatedModel, _ = m.Update(specialKey(tea.KeyUp))
+	m = updatedModel.(Model)
+	if m.dbCursor != len(m.dbOptions)-1 {
+		t.Errorf("expected dbCursor to wrap to %d, got %d", len(m.dbOptions)-1, m.dbCursor)
+	}
+
+	// Enter advances to StepAppsCreated
+	updatedModel, _ = m.Update(specialKey(tea.KeyEnter))
+	m = updatedModel.(Model)
+	if m.step != StepAppsCreated {
+		t.Errorf("expected StepAppsCreated after Enter, got %v", m.step)
+	}
+	if m.appsPhase != 0 {
+		t.Errorf("expected appsPhase reset to 0 (ask), got %d", m.appsPhase)
+	}
+
+	// Esc returns to StepDependencies
+	m.step = StepDataBase
+	updatedModel, _ = m.Update(specialKey(tea.KeyEsc))
+	m = updatedModel.(Model)
+	if m.step != StepDependencies {
+		t.Errorf("expected StepDependencies after Esc, got %v", m.step)
+	}
+}
+
+func TestUpdate_StepAppsCreated_Ask(t *testing.T) {
+	// TEST-TUI-30: yes/no question phase
+	m := NewModel()
+	m.step = StepAppsCreated
+	m.appsPhase = 0
+
+	updatedModel, _ := m.Update(specialKey(tea.KeyDown))
+	m = updatedModel.(Model)
+	if m.appsChoice != 1 {
+		t.Errorf("expected appsChoice = 1 after KeyDown, got %d", m.appsChoice)
+	}
+
+	// Enter with Yes moves to the select phase
+	updatedModel, _ = m.Update(specialKey(tea.KeyEnter))
+	m = updatedModel.(Model)
+	if m.step != StepAppsCreated || m.appsPhase != 1 {
+		t.Errorf("expected StepAppsCreated phase 1 after Enter on Yes, got step=%v phase=%d", m.step, m.appsPhase)
+	}
+
+	// 'n' on the ask phase skips straight to templates
+	m = NewModel()
+	m.step = StepAppsCreated
+	m.appsChecked["api"] = true
+	updatedModel, _ = m.Update(keyMsg('n', "n"))
+	m = updatedModel.(Model)
+	if m.step != StepTemplates {
+		t.Errorf("expected StepTemplates after 'n', got %v", m.step)
+	}
+	if len(m.appsChecked) != 0 {
+		t.Errorf("expected appsChecked cleared after 'n', got %v", m.appsChecked)
+	}
+
+	// 'y' selects Yes and enters the select phase
+	m = NewModel()
+	m.step = StepAppsCreated
+	updatedModel, _ = m.Update(keyMsg('y', "y"))
+	m = updatedModel.(Model)
+	if m.appsChoice != 1 || m.appsPhase != 1 {
+		t.Errorf("expected Yes + select phase after 'y', got choice=%d phase=%d", m.appsChoice, m.appsPhase)
+	}
+
+	// Esc returns to StepDataBase
+	m = NewModel()
+	m.step = StepAppsCreated
+	updatedModel, _ = m.Update(specialKey(tea.KeyEsc))
+	m = updatedModel.(Model)
+	if m.step != StepDataBase {
+		t.Errorf("expected StepDataBase after Esc, got %v", m.step)
+	}
+}
+
+func TestUpdate_StepAppsCreated_Select(t *testing.T) {
+	// TEST-TUI-31: checkbox selection phase
+	m := NewModel()
+	m.step = StepAppsCreated
+	m.appsPhase = 1
+	m.appsChoice = 1
+
+	updatedModel, _ := m.Update(specialKey(tea.KeyDown))
+	m = updatedModel.(Model)
+	if m.appsCursor != 1 {
+		t.Errorf("expected appsCursor = 1 after KeyDown, got %d", m.appsCursor)
+	}
+
+	targetID := m.appOptions[m.appsCursor].ID
+	updatedModel, _ = m.Update(specialKey(tea.KeySpace))
+	m = updatedModel.(Model)
+	if !m.appsChecked[targetID] {
+		t.Errorf("expected %q checked after Space", targetID)
+	}
+
+	// Enter continues to StepTemplates
+	updatedModel, _ = m.Update(specialKey(tea.KeyEnter))
+	m = updatedModel.(Model)
+	if m.step != StepTemplates {
+		t.Errorf("expected StepTemplates after Enter, got %v", m.step)
+	}
+
+	// Esc goes back to the ask phase
+	m = NewModel()
+	m.step = StepAppsCreated
+	m.appsPhase = 1
+	updatedModel, _ = m.Update(specialKey(tea.KeyEsc))
+	m = updatedModel.(Model)
+	if m.appsPhase != 0 {
+		t.Errorf("expected back to ask phase after Esc, got phase %d", m.appsPhase)
+	}
+}
+
+func TestUpdate_StepTemplates(t *testing.T) {
+	// TEST-TUI-32: templates radio navigation
+	m := NewModel()
+	m.step = StepTemplates
+
+	updatedModel, _ := m.Update(specialKey(tea.KeyDown))
+	m = updatedModel.(Model)
+	if m.templatesChoice != 1 {
+		t.Errorf("expected templatesChoice = 1 after KeyDown, got %d", m.templatesChoice)
+	}
+
+	updatedModel, _ = m.Update(specialKey(tea.KeyEnter))
+	m = updatedModel.(Model)
+	if m.step != StepConfirm {
+		t.Errorf("expected StepConfirm after Enter, got %v", m.step)
+	}
+
+	m.step = StepTemplates
+	updatedModel, _ = m.Update(specialKey(tea.KeyEsc))
+	m = updatedModel.(Model)
+	if m.step != StepAppsCreated || m.appsPhase != 0 {
+		t.Errorf("expected StepAppsCreated ask phase after Esc, got step=%v phase=%d", m.step, m.appsPhase)
+	}
+
+	// TEST-TUI-33: choices clamp when per-app becomes unavailable
+	m = NewModel()
+	m.step = StepAppsCreated
+	m.appsPhase = 1
+	m.appsChecked["api"] = true
+	m.templatesChoice = 2 // perapp while apps are selected
+	updatedModel, _ = m.Update(specialKey(tea.KeyEnter))
+	m = updatedModel.(Model)
+	if m.step != StepTemplates || m.templatesChoice != 2 {
+		t.Fatalf("expected StepTemplates with perapp choice kept, got step=%v choice=%d", m.step, m.templatesChoice)
+	}
+
+	m.appsChecked = make(map[string]bool)
+	m.step = StepAppsCreated
+	m.appsPhase = 1
+	updatedModel, _ = m.Update(specialKey(tea.KeyEnter))
+	m = updatedModel.(Model)
+	if m.step != StepTemplates || m.templatesChoice != 0 {
+		t.Errorf("expected templatesChoice clamped to 0 without apps, got step=%v choice=%d", m.step, m.templatesChoice)
 	}
 }
 
@@ -493,6 +681,9 @@ func TestUpdate_GlobalQuit(t *testing.T) {
 		StepProjectName,
 		StepDocker,
 		StepDependencies,
+		StepDataBase,
+		StepAppsCreated,
+		StepTemplates,
 		StepConfirm,
 		StepExecuting,
 		StepDone,

@@ -34,6 +34,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case StepDataBase:
 			return m.updateDataBases(msg)
 
+		case StepAppsCreated:
+			return m.updateAppsCreated(msg)
+
+		case StepTemplates:
+			return m.updateTemplates(msg)
+
 		case StepConfirm:
 			return m.updateConfirm(msg)
 
@@ -64,6 +70,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 		return m, nil
 
 	case spinner.TickMsg:
@@ -197,19 +204,19 @@ func (m Model) updateDependencies(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) updateDataBases(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
-		if m.depCursor > 0 {
-			m.depCursor--
+		if m.dbCursor > 0 {
+			m.dbCursor--
 		} else {
-			m.depCursor = len(m.dbOptions) - 1
+			m.dbCursor = len(m.dbOptions) - 1
 		}
 	case "down", "j":
-		if m.depCursor < len(m.dbOptions)-1 {
-			m.depCursor++
+		if m.dbCursor < len(m.dbOptions)-1 {
+			m.dbCursor++
 		} else {
-			m.depCursor = 0
+			m.dbCursor = 0
 		}
 	case "space", "x":
-		currentID := m.dbOptions[m.depCursor].ID
+		currentID := m.dbOptions[m.dbCursor].ID
 		m.depChecked[currentID] = !m.depChecked[currentID]
 	case "a":
 		allSelected := true
@@ -223,10 +230,115 @@ func (m Model) updateDataBases(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.depChecked[opt.ID] = !allSelected
 		}
 	case "enter":
-		m.step = StepConfirm
+		m.step = StepAppsCreated
+		m.appsPhase = 0
 		return m, nil
 	case "esc", "backspace":
 		m.step = StepDependencies
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) updateAppsCreated(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch m.appsPhase {
+	case 0: // ask yes/no
+		switch msg.String() {
+		case "up", "k", "left", "h":
+			m.appsChoice = 0
+		case "down", "j", "right", "l":
+			m.appsChoice = 1
+		case "y", "Y":
+			m.appsChoice = 1
+			m.appsPhase = 1
+			return m, nil
+		case "n", "N":
+			m.appsChoice = 0
+			m.appsChecked = make(map[string]bool)
+			m.toTemplates()
+			return m, nil
+		case "enter":
+			if m.appsChoice == 1 {
+				m.appsPhase = 1
+			} else {
+				m.appsChecked = make(map[string]bool)
+				m.toTemplates()
+			}
+			return m, nil
+		case "esc", "backspace":
+			m.step = StepDataBase
+			return m, nil
+		}
+
+	case 1: // select apps
+		switch msg.String() {
+		case "up", "k":
+			if m.appsCursor > 0 {
+				m.appsCursor--
+			} else {
+				m.appsCursor = len(m.appOptions) - 1
+			}
+		case "down", "j":
+			if m.appsCursor < len(m.appOptions)-1 {
+				m.appsCursor++
+			} else {
+				m.appsCursor = 0
+			}
+		case "space", "x":
+			currentID := m.appOptions[m.appsCursor].ID
+			m.appsChecked[currentID] = !m.appsChecked[currentID]
+		case "a":
+			allSelected := true
+			for _, opt := range m.appOptions {
+				if !m.appsChecked[opt.ID] {
+					allSelected = false
+					break
+				}
+			}
+			for _, opt := range m.appOptions {
+				m.appsChecked[opt.ID] = !allSelected
+			}
+		case "enter":
+			m.toTemplates()
+			return m, nil
+		case "esc", "backspace":
+			m.appsPhase = 0
+			return m, nil
+		}
+	}
+	return m, nil
+}
+
+// toTemplates clamps templatesChoice against the options available for the
+// current app selection before entering the templates step.
+func (m *Model) toTemplates() {
+	if m.templatesChoice >= len(m.templateOptions()) {
+		m.templatesChoice = 0
+	}
+	m.step = StepTemplates
+}
+
+func (m Model) updateTemplates(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	opts := m.templateOptions()
+	switch msg.String() {
+	case "up", "k", "left", "h":
+		if m.templatesChoice > 0 {
+			m.templatesChoice--
+		} else {
+			m.templatesChoice = len(opts) - 1
+		}
+	case "down", "j", "right", "l":
+		if m.templatesChoice < len(opts)-1 {
+			m.templatesChoice++
+		} else {
+			m.templatesChoice = 0
+		}
+	case "enter":
+		m.step = StepConfirm
+		return m, nil
+	case "esc", "backspace":
+		m.step = StepAppsCreated
+		m.appsPhase = 0
 		return m, nil
 	}
 	return m, nil
@@ -239,7 +351,7 @@ func (m Model) updateConfirm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		cmd := m.startGeneration()
 		return m, cmd
 	case "esc", "backspace", "b":
-		m.step = StepDataBase
+		m.step = StepTemplates
 		return m, nil
 	case "q", "n", "N":
 		return m, tea.Quit

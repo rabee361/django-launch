@@ -62,3 +62,138 @@ func TestView_WidthZeroUnchanged(t *testing.T) {
 		t.Errorf("TEST-TUI-24: expected full help line at width 0")
 	}
 }
+
+func TestView_ResponsiveHeader(t *testing.T) {
+	// TEST-TUI-34: full banner when it fits, compact title when it does not
+	m := NewModel()
+	m.step = StepDocker
+	m.height = 0
+	if !strings.Contains(m.View().Content, "██████╗") {
+		t.Errorf("TEST-TUI-34: expected full banner at height 0")
+	}
+
+	m.height = 100
+	if !strings.Contains(m.View().Content, "██████╗") {
+		t.Errorf("TEST-TUI-34: expected full banner when it fits")
+	}
+
+	m.height = 8
+	content := m.View().Content
+	if strings.Contains(content, "██████╗") {
+		t.Errorf("TEST-TUI-34: expected banner hidden on a short terminal")
+	}
+	if !strings.Contains(content, "DJANGO LAUNCH") {
+		t.Errorf("TEST-TUI-34: expected compact title on a short terminal, got:\n%s", content)
+	}
+
+	// Compact mode must still render the step content
+	if !strings.Contains(content, "Docker Support") {
+		t.Errorf("TEST-TUI-34: expected step content below the compact title, got:\n%s", content)
+	}
+}
+
+func TestView_StepBadges(t *testing.T) {
+	// TEST-TUI-35: all wizard steps are numbered out of 7
+	cases := map[Step]string{
+		StepProjectName:  "Step 1/7",
+		StepDocker:       "Step 2/7",
+		StepDependencies: "Step 3/7",
+		StepDataBase:     "Step 4/7",
+		StepAppsCreated:  "Step 5/7",
+		StepTemplates:    "Step 6/7",
+		StepConfirm:      "Step 7/7",
+	}
+	for step, badge := range cases {
+		m := NewModel()
+		m.step = step
+		if !strings.Contains(m.View().Content, badge) {
+			t.Errorf("TEST-TUI-35: step %v missing badge %q", step, badge)
+		}
+	}
+}
+
+func TestView_DataBasesUsesDbCursor(t *testing.T) {
+	// TEST-TUI-36: regression - a large depCursor must not panic or misplace
+	// the database view (it used to index dbOptions with depCursor)
+	m := NewModel()
+	m.step = StepDataBase
+	m.depCursor = 8
+
+	view := m.View().Content
+	if !strings.Contains(view, "PostgreSQL") || !strings.Contains(view, "Sqlite") {
+		t.Errorf("TEST-TUI-36: expected database options rendered, got:\n%s", view)
+	}
+	if !strings.Contains(view, "psycopg is installed for you") {
+		t.Errorf("TEST-TUI-36: expected database descriptions rendered, got:\n%s", view)
+	}
+}
+
+func TestView_AppsCreated_AskPhase(t *testing.T) {
+	// TEST-TUI-37: ask phase renders the yes/no question
+	m := NewModel()
+	m.step = StepAppsCreated
+	m.appsPhase = 0
+
+	view := m.View().Content
+	if !strings.Contains(view, "Would you like to create starter apps") {
+		t.Errorf("TEST-TUI-37: expected apps question, got:\n%s", view)
+	}
+	if !strings.Contains(view, "Yes") || !strings.Contains(view, "No") {
+		t.Errorf("TEST-TUI-37: expected Yes/No options, got:\n%s", view)
+	}
+}
+
+func TestView_AppsCreated_SelectPhase(t *testing.T) {
+	// TEST-TUI-38: select phase renders the app checkboxes
+	m := NewModel()
+	m.step = StepAppsCreated
+	m.appsPhase = 1
+
+	view := m.View().Content
+	for _, expected := range []string{"api", "base", "REST API endpoints app"} {
+		if !strings.Contains(view, expected) {
+			t.Errorf("TEST-TUI-38: expected %q in apps view, got:\n%s", expected, view)
+		}
+	}
+}
+
+func TestView_Templates(t *testing.T) {
+	// TEST-TUI-39: per-app option hidden without apps, shown with apps
+	m := NewModel()
+	m.step = StepTemplates
+
+	view := m.View().Content
+	if !strings.Contains(view, "No templates folder") || !strings.Contains(view, "Project root templates/ folder") {
+		t.Errorf("TEST-TUI-39: expected base template options, got:\n%s", view)
+	}
+	if strings.Contains(view, "templates/ in each app") {
+		t.Errorf("TEST-TUI-39: per-app option must be hidden without apps, got:\n%s", view)
+	}
+
+	m.appsChecked["api"] = true
+	view = m.View().Content
+	if !strings.Contains(view, "templates/ in each app") {
+		t.Errorf("TEST-TUI-39: expected per-app option with apps selected, got:\n%s", view)
+	}
+}
+
+func TestView_ConfirmIncludesNewRows(t *testing.T) {
+	// TEST-TUI-40: confirm card lists database, apps, templates
+	m := NewModel()
+	m.step = StepConfirm
+	m.cfg.ProjectName = "demo_app"
+	m.depChecked["postgresql"] = true
+	m.appsChecked["api"] = true
+	m.templatesChoice = 1 // root
+
+	view := m.View().Content
+	for _, expected := range []string{
+		"Database     : PostgreSQL",
+		"Apps         : api",
+		"Templates    : Project root templates/ folder",
+	} {
+		if !strings.Contains(view, expected) {
+			t.Errorf("TEST-TUI-40: expected %q in confirm card, got:\n%s", expected, view)
+		}
+	}
+}

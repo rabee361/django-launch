@@ -69,12 +69,15 @@ func GenerateRequirementsTxt(cfg *config.ProjectConfig) error {
 	reqPath := filepath.Join(cfg.OutputDir, "requirements.txt")
 	var lines []string
 
-	lines = append(lines, "Django>=6.0")
+	lines = append(lines, "Django>=6.1")
 	for _, dep := range cfg.Dependencies {
 		trimmed := strings.TrimSpace(dep)
 		if trimmed != "" {
 			lines = append(lines, trimmed)
 		}
+	}
+	if cfg.HasDatabase("postgresql") {
+		lines = append(lines, "psycopg[binary]")
 	}
 
 	content := strings.Join(lines, "\n") + "\n"

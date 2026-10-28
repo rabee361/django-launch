@@ -14,6 +14,11 @@ var (
 			Foreground(primaryColor).
 			MarginBottom(1)
 
+	compactTitleStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(primaryColor).
+				MarginBottom(1)
+
 	subtitleStyle = lipgloss.NewStyle().
 			Foreground(mutedColor).
 			MarginBottom(1)

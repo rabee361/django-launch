@@ -10,6 +10,12 @@ import (
 )
 
 const sampleSettingsPy = `
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+SECRET_KEY = "django-insecure-test-sample-key"
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -25,6 +31,13 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
 ]
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
 `
 
 const sampleUrlsPy = `from django.contrib import admin
@@ -55,7 +68,7 @@ func TestPatchSettings_DRFOnly(t *testing.T) {
 		Dependencies: []string{"djangorestframework"},
 	}
 
-	if err := patchSettings(settingsPath, cfg); err != nil {
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
 		t.Fatalf("patchSettings failed: %v", err)
 	}
 
@@ -86,7 +99,7 @@ func TestPatchSettings_SilkOnly(t *testing.T) {
 		Dependencies: []string{"django-silk"},
 	}
 
-	if err := patchSettings(settingsPath, cfg); err != nil {
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
 		t.Fatalf("patchSettings failed: %v", err)
 	}
 
@@ -111,7 +124,7 @@ func TestPatchSettings_SimpleJWT(t *testing.T) {
 		Dependencies: []string{"djangorestframework-simplejwt"},
 	}
 
-	if err := patchSettings(settingsPath, cfg); err != nil {
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
 		t.Fatalf("patchSettings failed: %v", err)
 	}
 
@@ -133,7 +146,7 @@ func TestPatchSettings_Pillow(t *testing.T) {
 		Dependencies: []string{"pillow"},
 	}
 
-	if err := patchSettings(settingsPath, cfg); err != nil {
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
 		t.Fatalf("patchSettings failed: %v", err)
 	}
 
@@ -158,7 +171,7 @@ func TestPatchSettings_AllDependenciesCombined(t *testing.T) {
 		Dependencies: []string{"djangorestframework", "django-silk", "djangorestframework-simplejwt", "pillow"},
 	}
 
-	if err := patchSettings(settingsPath, cfg); err != nil {
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
 		t.Fatalf("patchSettings failed: %v", err)
 	}
 
@@ -184,9 +197,141 @@ func TestPatchSettings_ErrorHandling(t *testing.T) {
 	cfg := &config.ProjectConfig{
 		Dependencies: []string{"djangorestframework"},
 	}
-	err := patchSettings(filepath.Join(t.TempDir(), "non_existent.py"), cfg)
-	if err == nil {
+	if _, err := patchSettings(filepath.Join(t.TempDir(), "non_existent.py"), cfg); err == nil {
 		t.Errorf("TEST-GEN-13: expected error for non-existent file, got nil")
+	}
+}
+
+func TestPatchSettings_DatabasesPostgres(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.py")
+	writeSampleFile(t, settingsPath, sampleSettingsPy)
+
+	cfg := &config.ProjectConfig{
+		ProjectName: "demo_app",
+		Databases:   []string{"postgresql"},
+	}
+
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
+		t.Fatalf("patchSettings failed: %v", err)
+	}
+
+	contentBytes, _ := os.ReadFile(settingsPath)
+	content := string(contentBytes)
+
+	for _, expected := range []string{
+		"'ENGINE': 'django.db.backends.postgresql',",
+		"os.environ.get('DB_NAME', 'demo_app')",
+		"os.environ.get('DB_USER', 'postgres')",
+		"os.environ.get('DB_PASSWORD', 'postgres')",
+		"os.environ.get('DB_HOST', 'localhost')",
+		"os.environ.get('DB_PORT', '5432')",
+		"import os",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Errorf("expected %q in settings, got:\n%s", expected, content)
+		}
+	}
+	if strings.Contains(content, "django.db.backends.sqlite3") {
+		t.Errorf("unexpected sqlite backend in settings:\n%s", content)
+	}
+}
+
+func TestPatchSettings_DatabasesSqlite(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.py")
+	writeSampleFile(t, settingsPath, sampleSettingsPy)
+
+	cfg := &config.ProjectConfig{
+		ProjectName: "demo_app",
+		Databases:   []string{"sqlite"},
+	}
+
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
+		t.Fatalf("patchSettings failed: %v", err)
+	}
+
+	contentBytes, _ := os.ReadFile(settingsPath)
+	content := string(contentBytes)
+
+	for _, expected := range []string{
+		"'ENGINE': 'django.db.backends.sqlite3',",
+		"os.environ.get('DB_NAME', str(BASE_DIR / 'db.sqlite3'))",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Errorf("expected %q in settings, got:\n%s", expected, content)
+		}
+	}
+}
+
+func TestPatchSettings_NoDatabasesKeepsStock(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.py")
+	writeSampleFile(t, settingsPath, sampleSettingsPy)
+
+	cfg := &config.ProjectConfig{}
+
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
+		t.Fatalf("patchSettings failed: %v", err)
+	}
+
+	contentBytes, _ := os.ReadFile(settingsPath)
+	content := string(contentBytes)
+
+	if !strings.Contains(content, `"NAME": BASE_DIR / "db.sqlite3"`) {
+		t.Errorf("expected stock DATABASES block to remain untouched, got:\n%s", content)
+	}
+}
+
+func TestPatchSettings_Environ(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.py")
+	writeSampleFile(t, settingsPath, sampleSettingsPy)
+
+	cfg := &config.ProjectConfig{
+		Dependencies: []string{"django-environ"},
+	}
+
+	secretKey, err := patchSettings(settingsPath, cfg)
+	if err != nil {
+		t.Fatalf("patchSettings failed: %v", err)
+	}
+	if secretKey != "django-insecure-test-sample-key" {
+		t.Errorf("expected extracted secret key %q, got %q", "django-insecure-test-sample-key", secretKey)
+	}
+
+	contentBytes, _ := os.ReadFile(settingsPath)
+	content := string(contentBytes)
+
+	for _, expected := range []string{
+		"import environ",
+		"environ.Env.read_env()",
+		"SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-test-sample-key')",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Errorf("expected %q in settings, got:\n%s", expected, content)
+		}
+	}
+}
+
+func TestPatchSettings_EnvironMissingSecretKey(t *testing.T) {
+	settingsWithoutKey := `
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+INSTALLED_APPS = []
+`
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.py")
+	writeSampleFile(t, settingsPath, settingsWithoutKey)
+
+	cfg := &config.ProjectConfig{
+		Dependencies: []string{"django-environ"},
+	}
+
+	if _, err := patchSettings(settingsPath, cfg); err == nil {
+		t.Errorf("expected error when django-environ is selected but no SECRET_KEY exists")
 	}
 }
 
@@ -309,9 +454,35 @@ func TestPatchUrls_ErrorHandling(t *testing.T) {
 	cfg := &config.ProjectConfig{
 		Dependencies: []string{"django-silk"},
 	}
-	err := patchUrls(filepath.Join(t.TempDir(), "non_existent_urls.py"), cfg)
-	if err == nil {
+	if err := patchUrls(filepath.Join(t.TempDir(), "non_existent_urls.py"), cfg); err == nil {
 		t.Errorf("TEST-GEN-18: expected error for non-existent file, got nil")
+	}
+}
+
+func TestPatchUrls_Apps(t *testing.T) {
+	dir := t.TempDir()
+	urlsPath := filepath.Join(dir, "urls.py")
+	writeSampleFile(t, urlsPath, sampleUrlsPy)
+
+	cfg := &config.ProjectConfig{
+		Apps: []string{"api", "base"},
+	}
+
+	if err := patchUrls(urlsPath, cfg); err != nil {
+		t.Fatalf("patchUrls failed: %v", err)
+	}
+
+	contentBytes, _ := os.ReadFile(urlsPath)
+	content := string(contentBytes)
+
+	for _, expected := range []string{
+		"from django.urls import path, include",
+		"path('api/', include('api.urls')),",
+		"path('base/', include('base.urls')),",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Errorf("expected %q in urls.py, got:\n%s", expected, content)
+		}
 	}
 }
 
@@ -329,9 +500,12 @@ func TestScaffoldSettingsAndUrls(t *testing.T) {
 		Dependencies: []string{"djangorestframework", "django-silk", "pillow"},
 	}
 
-	err := ScaffoldSettingsAndUrls(cfg)
+	secretKey, err := ScaffoldSettingsAndUrls(cfg)
 	if err != nil {
 		t.Fatalf("ScaffoldSettingsAndUrls failed: %v", err)
+	}
+	if secretKey != "django-insecure-test-sample-key" {
+		t.Errorf("expected extracted secret key, got %q", secretKey)
 	}
 
 	// Verify settings.py

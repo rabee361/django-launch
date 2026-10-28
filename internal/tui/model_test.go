@@ -181,9 +181,60 @@ func TestNewModel(t *testing.T) {
 		t.Errorf("TEST-TUI-06: expected depChecked map to be initialized, got nil")
 	}
 
+	if len(m.dbOptions) != 2 {
+		t.Errorf("TEST-TUI-06: expected 2 database options, got %d", len(m.dbOptions))
+	}
+	if m.dbCursor != 0 {
+		t.Errorf("TEST-TUI-06: expected dbCursor = 0, got %d", m.dbCursor)
+	}
+
+	if len(m.appOptions) != 2 {
+		t.Errorf("TEST-TUI-06: expected 2 app options, got %d", len(m.appOptions))
+	}
+	if m.appOptions[0].ID != "api" || m.appOptions[1].ID != "base" {
+		t.Errorf("TEST-TUI-06: expected app options api and base, got %v", m.appOptions)
+	}
+	if m.appsCursor != 0 {
+		t.Errorf("TEST-TUI-06: expected appsCursor = 0, got %d", m.appsCursor)
+	}
+	if m.appsChecked == nil {
+		t.Errorf("TEST-TUI-06: expected appsChecked map to be initialized, got nil")
+	}
+	if m.appsChoice != 0 {
+		t.Errorf("TEST-TUI-06: expected appsChoice = 0 (No), got %d", m.appsChoice)
+	}
+	if m.appsPhase != 0 {
+		t.Errorf("TEST-TUI-06: expected appsPhase = 0 (ask), got %d", m.appsPhase)
+	}
+	if m.templatesChoice != 0 {
+		t.Errorf("TEST-TUI-06: expected templatesChoice = 0, got %d", m.templatesChoice)
+	}
+
 	// Verify Init command is non-nil
 	cmd := m.Init()
 	if cmd == nil {
 		t.Errorf("TEST-TUI-06: expected non-nil Init cmd (Blink)")
+	}
+}
+
+func TestTemplateOptions(t *testing.T) {
+	m := NewModel()
+
+	// TEST-TUI-27: per-app option only appears when apps are selected
+	opts := m.templateOptions()
+	if len(opts) != 2 {
+		t.Fatalf("TEST-TUI-27: expected 2 template options without apps, got %d", len(opts))
+	}
+	if opts[0].ID != "none" || opts[1].ID != "root" {
+		t.Errorf("TEST-TUI-27: expected none and root options, got %v", opts)
+	}
+
+	m.appsChecked["api"] = true
+	opts = m.templateOptions()
+	if len(opts) != 3 {
+		t.Fatalf("TEST-TUI-27: expected 3 template options with apps, got %d", len(opts))
+	}
+	if opts[2].ID != "perapp" {
+		t.Errorf("TEST-TUI-27: expected perapp as third option, got %v", opts[2])
 	}
 }

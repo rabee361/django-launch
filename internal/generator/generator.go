@@ -81,14 +81,21 @@ func GenerateProject(ctx context.Context, cfg *config.ProjectConfig, onProgress 
 	}
 	currentStep++
 
-	// Deep scaffold settings and urls
+	// Deep scaffold settings, urls, apps, and environment files
 	if onProgress != nil {
-		onProgress(currentStep, totalSteps, "Scaffolding settings.py and urls.py with chosen dependencies...")
+		onProgress(currentStep, totalSteps, "Scaffolding settings.py, urls.py, apps, and environment files...")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if err := ScaffoldSettingsAndUrls(cfg); err != nil {
+	secretKey, err := ScaffoldSettingsAndUrls(cfg)
+	if err != nil {
+		return err
+	}
+	if err := CreateApps(ctx, cfg); err != nil {
+		return err
+	}
+	if err := GenerateEnvFile(cfg, secretKey); err != nil {
 		return err
 	}
 	currentStep++

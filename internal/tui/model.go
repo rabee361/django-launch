@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"strings"
+	"runtime"
 	"slices"
+	"strings"
+
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -21,6 +23,8 @@ const (
 	StepDocker
 	StepDependencies
 	StepDataBase
+	StepAppsCreated
+	StepTemplates
 	StepConfirm
 	StepExecuting
 	StepDone
@@ -49,7 +53,13 @@ type DatabaseOption struct {
 	Description string
 }
 
-type MailerOption struct {
+type AppOption struct {
+	ID          string
+	Name        string
+	Description string
+}
+
+type TemplateOption struct {
 	ID          string
 	Name        string
 	Description string
@@ -68,11 +78,18 @@ type Model struct {
 
 	dockerChoice int
 
-	depOptions    []DependencyOption
-	dbOptions     []DatabaseOption
-	depCursor     int
-	dbCursor      int
-	depChecked    map[string]bool
+	depOptions  []DependencyOption
+	dbOptions   []DatabaseOption
+	appOptions  []AppOption
+	depCursor   int
+	dbCursor    int
+	appsCursor  int
+	depChecked  map[string]bool
+	appsChecked map[string]bool
+	appsChoice  int // 0 = No, 1 = Yes
+	appsPhase   int // 0 = ask yes/no, 1 = select apps
+
+	templatesChoice int
 
 	progressSub   chan tea.Msg
 	progressItems []string
@@ -169,9 +186,23 @@ func NewModel() Model {
 				Description: "File-based zero-configuration database",
 			},
 		},
-		depCursor:    0,
-		dbCursor:     0,
-		depChecked:   make(map[string]bool),
+		appOptions: []AppOption{
+			{
+				ID:          "api",
+				Name:        "api",
+				Description: "REST API endpoints app",
+			},
+			{
+				ID:          "base",
+				Name:        "base",
+				Description: "Shared utilities and models app",
+			},
+		},
+		depCursor:   0,
+		dbCursor:    0,
+		appsCursor:  0,
+		depChecked:  make(map[string]bool),
+		appsChecked: make(map[string]bool),
 	}
 
 	return m
@@ -200,6 +231,42 @@ func validateProjectName(name string) error {
 	return nil
 }
 
+// selectedApps returns the ids of the apps the user picked.
+func (m Model) selectedApps() []string {
+	var apps []string
+	for _, opt := range m.appOptions {
+		if m.appsChecked[opt.ID] {
+			apps = append(apps, opt.ID)
+		}
+	}
+	return apps
+}
+
+// templateOptions returns the templates folder choices; per-app folders only
+// make sense when at least one app is created.
+func (m Model) templateOptions() []TemplateOption {
+	opts := []TemplateOption{
+		{
+			ID:          "none",
+			Name:        "No templates folder",
+			Description: "Skip template directories entirely",
+		},
+		{
+			ID:          "root",
+			Name:        "Project root templates/ folder",
+			Description: "A single templates/ folder at the project root",
+		},
+	}
+	if len(m.selectedApps()) > 0 {
+		opts = append(opts, TemplateOption{
+			ID:          "perapp",
+			Name:        "templates/ in each app",
+			Description: "A templates/ folder inside every created app",
+		})
+	}
+	return opts
+}
+
 func (m *Model) startGeneration() tea.Cmd {
 	m.progressSub = make(chan tea.Msg)
 	m.progressItems = nil
@@ -219,14 +286,22 @@ func (m *Model) startGeneration() tea.Cmd {
 		}
 	}
 
+	apps := m.selectedApps()
+
 	m.cfg.Dependencies = deps
 	m.cfg.Databases = dbs
+	m.cfg.Apps = apps
+	m.cfg.Templates = "none"
+	if opts := m.templateOptions(); m.templatesChoice < len(opts) {
+		m.cfg.Templates = opts[m.templatesChoice].ID
+	}
 	m.cfg.WithDocker = (m.dockerChoice == 0)
 
 	sub := m.progressSub
 	cfgCopy := m.cfg
 	cfgCopy.Dependencies = slices.Clone(deps)
 	cfgCopy.Databases = slices.Clone(dbs)
+	cfgCopy.Apps = slices.Clone(apps)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelGen = cancel
@@ -266,4 +341,36 @@ func waitForActivity(sub chan tea.Msg) tea.Cmd {
 	return func() tea.Msg {
 		return <-sub
 	}
+}
+
+func (m Model) nextStepsText() string {
+	var activateCmd string
+	if runtime.GOOS == "windows" {
+		activateCmd = fmt.Sprintf(".\\%s\\.venv\\Scripts\\activate", m.cfg.ProjectName)
+	} else {
+		activateCmd = fmt.Sprintf("source %s/.venv/bin/activate", m.cfg.ProjectName)
+	}
+
+	return fmt.Sprintf(
+		"Next Steps:\n\n"+
+			"  1. Enter your project directory:\n"+
+			"     cd %s\n\n"+
+			"  2. Activate virtual environment:\n"+
+			"     %s\n\n"+
+			"  3. Apply initial migrations:\n"+
+			"     python manage.py migrate\n\n"+
+			"  4. Start development server:\n"+
+			"     python manage.py runserver\n",
+		m.cfg.ProjectName,
+		activateCmd,
+	)
+}
+
+// NextSteps returns the post-generation instructions so main can print them
+// into the scrollback after the program exits. Empty unless the run completed.
+func (m Model) NextSteps() string {
+	if m.step != StepDone {
+		return ""
+	}
+	return m.nextStepsText()
 }

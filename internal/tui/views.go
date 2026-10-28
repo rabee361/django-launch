@@ -2,17 +2,13 @@ package tui
 
 import (
 	"fmt"
-	"runtime"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
-func (m Model) View() tea.View {
-	var str_builder strings.Builder
-
-	bannerArt := `
+const bannerArt = `
 ██████╗      ██╗ █████╗ ███╗   ██╗ ██████╗  ██████╗ 
 ██╔══██╗     ██║██╔══██╗████╗  ██║██╔════╝ ██╔═══██╗
 ██║  ██║     ██║███████║██╔██╗ ██║██║  ███╗██║   ██║
@@ -26,45 +22,72 @@ func (m Model) View() tea.View {
 ███████╗██║  ██║╚██████╔╝██║ ╚████║╚██████╗██║  ██║ 
 ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝╚═╝  ╚═╝ 
 `
-	str_builder.WriteString(titleStyle.Render(string(bannerArt)))
-	str_builder.WriteString("\n")
 
-	base := strings.Count(str_builder.String(), "\n")
-	nameRow, depRow, dbRow := -1, -1, -1
+var (
+	bannerPrefix = titleStyle.Render(bannerArt) + "\n"
+	bannerRows   = strings.Count(bannerPrefix, "\n")
+)
+
+// headerFor renders the full banner when it fits in the terminal height and a
+// compact one-line title otherwise, so the alt-screen never clips the content.
+func (m Model) headerFor(bodyRows int) string {
+	if m.height == 0 || m.height >= bannerRows+bodyRows {
+		return bannerPrefix
+	}
+	return compactTitleStyle.Render("DJANGO LAUNCH") + "\n\n"
+}
+
+func (m Model) View() tea.View {
+	var body strings.Builder
+	nameRow, depRow, dbRow, appsRow, templatesRow := -1, -1, -1, -1, -1
 
 	switch m.step {
 	case StepProjectName:
 		s, row := m.viewProjectName()
-		str_builder.WriteString(s)
-		nameRow = base + row
+		body.WriteString(s)
+		nameRow = row
 	case StepDocker:
-		str_builder.WriteString(m.viewDocker())
+		body.WriteString(m.viewDocker())
 	case StepDependencies:
 		s, row := m.viewDependencies()
-		str_builder.WriteString(s)
-		depRow = base + row
+		body.WriteString(s)
+		depRow = row
 	case StepDataBase:
 		s, row := m.viewDatabases()
-		str_builder.WriteString(s)
-		dbRow = base + row
+		body.WriteString(s)
+		dbRow = row
+	case StepAppsCreated:
+		s, row := m.viewAppsCreated()
+		body.WriteString(s)
+		appsRow = row
+	case StepTemplates:
+		s, row := m.viewTemplates()
+		body.WriteString(s)
+		templatesRow = row
 	case StepConfirm:
-		str_builder.WriteString(m.viewConfirm())
+		body.WriteString(m.viewConfirm())
 	case StepExecuting:
-		str_builder.WriteString(m.viewExecuting())
+		body.WriteString(m.viewExecuting())
 	case StepDone:
-		str_builder.WriteString(m.viewDone())
+		body.WriteString(m.viewDone())
 	case StepError:
-		str_builder.WriteString(m.viewError())
+		body.WriteString(m.viewError())
 	}
 
-	frame := str_builder.String()
+	bodyStr := body.String()
+	prefix := m.headerFor(strings.Count(bodyStr, "\n"))
+	base := strings.Count(prefix, "\n")
+	nameRow, depRow, dbRow = nameRow+base, depRow+base, dbRow+base
+	appsRow, templatesRow = appsRow+base, templatesRow+base
+
+	frame := prefix + bodyStr
 	if m.width > 0 {
 		frame = clipLines(frame, m.width)
 	}
 
 	v := tea.NewView(frame)
 	v.AltScreen = true
-    v.MouseMode = tea.MouseModeCellMotion
+	v.MouseMode = tea.MouseModeCellMotion
 
 	switch m.step {
 	case StepProjectName:
@@ -80,7 +103,19 @@ func (m Model) View() tea.View {
 		}
 	case StepDataBase:
 		if dbRow >= 0 {
-			c := tea.NewCursor(0, depRow)
+			c := tea.NewCursor(0, dbRow)
+			c.Shape = tea.CursorBar
+			v.Cursor = c
+		}
+	case StepAppsCreated:
+		if appsRow >= 0 {
+			c := tea.NewCursor(0, appsRow)
+			c.Shape = tea.CursorBar
+			v.Cursor = c
+		}
+	case StepTemplates:
+		if templatesRow >= 0 {
+			c := tea.NewCursor(0, templatesRow)
 			c.Shape = tea.CursorBar
 			v.Cursor = c
 		}
@@ -91,7 +126,7 @@ func (m Model) View() tea.View {
 func (m Model) viewProjectName() (string, int) {
 	var str_builder strings.Builder
 
-	str_builder.WriteString(stepBadgeStyle.Render("Step 1/5"))
+	str_builder.WriteString(stepBadgeStyle.Render("Step 1/7"))
 	str_builder.WriteString(stepHeaderStyle.Render("Project Name"))
 	str_builder.WriteString("\n\n")
 	str_builder.WriteString("Enter the name for your Django project:\n\n")
@@ -113,7 +148,7 @@ func (m Model) viewProjectName() (string, int) {
 func (m Model) viewDocker() string {
 	var str_builder strings.Builder
 
-	str_builder.WriteString(stepBadgeStyle.Render("Step 2/5"))
+	str_builder.WriteString(stepBadgeStyle.Render("Step 2/7"))
 	str_builder.WriteString(stepHeaderStyle.Render("Docker Support"))
 	str_builder.WriteString("\n\n")
 
@@ -149,7 +184,7 @@ func (m Model) viewDocker() string {
 func (m Model) viewDependencies() (string, int) {
 	var str_builder strings.Builder
 
-	str_builder.WriteString(stepBadgeStyle.Render("Step 3/5"))
+	str_builder.WriteString(stepBadgeStyle.Render("Step 3/7"))
 	str_builder.WriteString(stepHeaderStyle.Render("Dependencies"))
 	str_builder.WriteString("\n\n")
 	str_builder.WriteString("Select optional packages to install and configure alongside Django:\n\n")
@@ -174,7 +209,7 @@ func (m Model) viewDependencies() (string, int) {
 			style = selectedItemStyle
 		}
 
-		str_builder.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, style.Render(opt.Name)))
+		str_builder.WriteString(fmt.Sprintf("%s%s %s - %s\n", cursor, checkbox, style.Render(opt.Name), subtitleStyle.Render(opt.Description)))
 	}
 
 	str_builder.WriteString("\n")
@@ -185,7 +220,7 @@ func (m Model) viewDependencies() (string, int) {
 func (m Model) viewDatabases() (string, int) {
 	var str_builder strings.Builder
 
-	str_builder.WriteString(stepBadgeStyle.Render("Step 4/5"))
+	str_builder.WriteString(stepBadgeStyle.Render("Step 4/7"))
 	str_builder.WriteString(stepHeaderStyle.Render("Databases"))
 	str_builder.WriteString("\n\n")
 	str_builder.WriteString("Select the Database you want to configure for your project:\n\n")
@@ -193,7 +228,7 @@ func (m Model) viewDatabases() (string, int) {
 	row := -1
 
 	for i, opt := range m.dbOptions {
-		if i == m.depCursor {
+		if i == m.dbCursor {
 			row = strings.Count(str_builder.String(), "\n")
 		}
 
@@ -205,12 +240,12 @@ func (m Model) viewDatabases() (string, int) {
 			checkbox = checkedStyle.Render("[✓]")
 		}
 
-		if m.depCursor == i {
+		if m.dbCursor == i {
 			cursor = selectedItemStyle.Render("▸ ")
 			style = selectedItemStyle
 		}
 
-		str_builder.WriteString(fmt.Sprintf("%s%s %s\n", cursor, checkbox, style.Render(opt.Name)))
+		str_builder.WriteString(fmt.Sprintf("%s%s %s - %s\n", cursor, checkbox, style.Render(opt.Name), subtitleStyle.Render(opt.Description)))
 	}
 
 	str_builder.WriteString("\n")
@@ -218,10 +253,119 @@ func (m Model) viewDatabases() (string, int) {
 	return str_builder.String(), row
 }
 
+func (m Model) viewAppsCreated() (string, int) {
+	var str_builder strings.Builder
+
+	str_builder.WriteString(stepBadgeStyle.Render("Step 5/7"))
+	str_builder.WriteString(stepHeaderStyle.Render("Starter Apps"))
+	str_builder.WriteString("\n\n")
+
+	if m.appsPhase == 0 {
+		str_builder.WriteString("Would you like to create starter apps for this project?\n\n")
+
+		options := []struct {
+			label string
+			desc  string
+		}{
+			{"Yes", "Create starter apps (api, base)"},
+			{"No", "Skip app creation"},
+		}
+
+		row := -1
+		for i, opt := range options {
+			if m.appsChoice == i {
+				row = strings.Count(str_builder.String(), "\n")
+			}
+
+			cursor := "  "
+			radio := "( )"
+			style := unselectedItemStyle
+
+			if m.appsChoice == i {
+				cursor = selectedItemStyle.Render("▸ ")
+				radio = checkedStyle.Render("(•)")
+				style = selectedItemStyle
+			}
+
+			str_builder.WriteString(fmt.Sprintf("%s%s %s - %s\n", cursor, radio, style.Render(opt.label), subtitleStyle.Render(opt.desc)))
+		}
+
+		str_builder.WriteString("\n")
+		str_builder.WriteString(helpStyle.Render("↑/↓ or hjkl: choose • y: yes, then pick apps • n: no, skip • Enter: continue • Esc/Backspace: back"))
+		return str_builder.String(), row
+	}
+
+	str_builder.WriteString("Select the apps to create:\n\n")
+
+	row := -1
+	for i, opt := range m.appOptions {
+		if i == m.appsCursor {
+			row = strings.Count(str_builder.String(), "\n")
+		}
+
+		cursor := "  "
+		checkbox := uncheckedStyle.Render("[ ]")
+		style := unselectedItemStyle
+
+		if m.appsChecked[opt.ID] {
+			checkbox = checkedStyle.Render("[✓]")
+		}
+
+		if m.appsCursor == i {
+			cursor = selectedItemStyle.Render("▸ ")
+			style = selectedItemStyle
+		}
+
+		str_builder.WriteString(fmt.Sprintf("%s%s %s - %s\n", cursor, checkbox, style.Render(opt.Name), subtitleStyle.Render(opt.Description)))
+	}
+
+	str_builder.WriteString("\n")
+	str_builder.WriteString(helpStyle.Render("↑/↓ or k/j: navigate • Space/x: toggle • a: toggle all • Enter: continue • Esc/Backspace: back to question"))
+	return str_builder.String(), row
+}
+
+func (m Model) viewTemplates() (string, int) {
+	var str_builder strings.Builder
+
+	str_builder.WriteString(stepBadgeStyle.Render("Step 6/7"))
+	str_builder.WriteString(stepHeaderStyle.Render("Templates Folder"))
+	str_builder.WriteString("\n\n")
+	str_builder.WriteString("Where should template folders live?\n\n")
+
+	opts := m.templateOptions()
+	choice := m.templatesChoice
+	if choice >= len(opts) {
+		choice = 0
+	}
+
+	row := -1
+	for i, opt := range opts {
+		if choice == i {
+			row = strings.Count(str_builder.String(), "\n")
+		}
+
+		cursor := "  "
+		radio := "( )"
+		style := unselectedItemStyle
+
+		if choice == i {
+			cursor = selectedItemStyle.Render("▸ ")
+			radio = checkedStyle.Render("(•)")
+			style = selectedItemStyle
+		}
+
+		str_builder.WriteString(fmt.Sprintf("%s%s %s - %s\n", cursor, radio, style.Render(opt.Name), subtitleStyle.Render(opt.Description)))
+	}
+
+	str_builder.WriteString("\n")
+	str_builder.WriteString(helpStyle.Render("↑/↓ or hjkl: choose • Enter: continue • Esc/Backspace: back"))
+	return str_builder.String(), row
+}
+
 func (m Model) viewConfirm() string {
 	var str_builder strings.Builder
 
-	str_builder.WriteString(stepBadgeStyle.Render("Step 5/5"))
+	str_builder.WriteString(stepBadgeStyle.Render("Step 7/7"))
 	str_builder.WriteString(stepHeaderStyle.Render("Confirmation"))
 	str_builder.WriteString("\n\n")
 
@@ -241,17 +385,41 @@ func (m Model) viewConfirm() string {
 		depsText = strings.Join(selectedDeps, ", ")
 	}
 
+	var selectedDBs []string
+	for _, opt := range m.dbOptions {
+		if m.depChecked[opt.ID] {
+			selectedDBs = append(selectedDBs, opt.Name)
+		}
+	}
+	dbText := "None (Django defaults)"
+	if len(selectedDBs) > 0 {
+		dbText = strings.Join(selectedDBs, ", ")
+	}
+
+	appsText := "None"
+	if apps := m.selectedApps(); len(apps) > 0 {
+		appsText = strings.Join(apps, ", ")
+	}
+
+	templatesText := "None"
+	if opts := m.templateOptions(); m.templatesChoice < len(opts) {
+		templatesText = opts[m.templatesChoice].Name
+	}
+
 	toolText := "python -m venv & pip"
 	if m.hasUv {
 		toolText = "uv (ultra-fast virtualenv & pip)"
 	}
 
 	cardContent := fmt.Sprintf(
-		"Project Name : %s\nTarget Path  : ./%s\nDocker       : %s\nDependencies : Django, %s\nEnvironment  : %s",
+		"Project Name : %s\nTarget Path  : ./%s\nDocker       : %s\nDependencies : Django, %s\nDatabase     : %s\nApps         : %s\nTemplates    : %s\nEnvironment  : %s",
 		selectedItemStyle.Render(m.cfg.ProjectName),
 		m.cfg.ProjectName,
 		dockerText,
 		depsText,
+		dbText,
+		appsText,
+		templatesText,
 		secondaryColorStyle(toolText),
 	)
 
@@ -293,28 +461,7 @@ func (m Model) viewDone() string {
 	str_builder.WriteString(successStyle.Render("✨ Project successfully created! ✨"))
 	str_builder.WriteString("\n\n")
 
-	var activateCmd string
-	if runtime.GOOS == "windows" {
-		activateCmd = fmt.Sprintf(".\\%s\\.venv\\Scripts\\activate", m.cfg.ProjectName)
-	} else {
-		activateCmd = fmt.Sprintf("source %s/.venv/bin/activate", m.cfg.ProjectName)
-	}
-
-	instructions := fmt.Sprintf(
-		"Next Steps:\n\n"+
-			"  1. Enter your project directory:\n"+
-			"     cd %s\n\n"+
-			"  2. Activate virtual environment:\n"+
-			"     %s\n\n"+
-			"  3. Apply initial migrations:\n"+
-			"     python manage.py migrate\n\n"+
-			"  4. Start development server:\n"+
-			"     python manage.py runserver\n",
-		m.cfg.ProjectName,
-		activateCmd,
-	)
-
-	str_builder.WriteString(cardStyle.Render(instructions))
+	str_builder.WriteString(cardStyle.Render(m.nextStepsText()))
 	str_builder.WriteString("\n\n")
 	str_builder.WriteString(helpStyle.Render("Press Enter, q, or Esc to exit."))
 	return str_builder.String()

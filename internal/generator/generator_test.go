@@ -3,6 +3,7 @@ package generator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -87,6 +88,9 @@ func TestGenerateProjectEndToEnd(t *testing.T) {
 		OutputDir:    projectDir,
 		WithDocker:   true,
 		Dependencies: []string{"djangorestframework", "pillow", "django-silk", "djangorestframework-simplejwt", "django-filter", "django-cors-headers", "django-environ", "django-debug-toolbar"},
+		Databases:    []string{"sqlite"},
+		Apps:         []string{"api", "base"},
+		Templates:    "perapp",
 		UseUv:        hasUv,
 		PythonCmd:    pyCmd,
 	}
@@ -123,6 +127,9 @@ func TestGenerateProjectEndToEnd(t *testing.T) {
 		if !strings.Contains(reqContent, dep) {
 			t.Errorf("expected %s in requirements.txt", dep)
 		}
+	}
+	if !strings.Contains(reqContent, "Django>=6.1") {
+		t.Errorf("expected Django>=6.1 pin in requirements.txt")
 	}
 
 	// 2. Check Dockerfile and .dockerignore
@@ -164,8 +171,31 @@ func TestGenerateProjectEndToEnd(t *testing.T) {
 	if !strings.Contains(urlsContent, "urlpatterns += static(settings.MEDIA_URL") {
 		t.Errorf("urls.py missing media static URL route for Pillow")
 	}
+	for _, app := range []string{"api", "base"} {
+		if !strings.Contains(urlsContent, fmt.Sprintf("path('%s/', include('%s.urls'))", app, app)) {
+			t.Errorf("urls.py missing %s app route", app)
+		}
+		if _, err := os.Stat(filepath.Join(projectDir, app, "urls.py")); err != nil {
+			t.Errorf("%s/urls.py missing: %v", app, err)
+		}
+		if _, err := os.Stat(filepath.Join(projectDir, app, "templates", ".gitkeep")); err != nil {
+			t.Errorf("%s/templates/.gitkeep missing: %v", app, err)
+		}
+	}
 
-	// 5. Test Django syntax / integrity using "python manage.py check"
+	// 5. Check .env, .gitignore
+	envBytes, err := os.ReadFile(filepath.Join(projectDir, ".env"))
+	if err != nil {
+		t.Fatalf(".env missing: %v", err)
+	}
+	if !strings.Contains(string(envBytes), "SECRET_KEY=") {
+		t.Errorf(".env missing SECRET_KEY")
+	}
+	if _, err := os.Stat(filepath.Join(projectDir, ".gitignore")); err != nil {
+		t.Errorf(".gitignore missing: %v", err)
+	}
+
+	// 6. Test Django syntax / integrity using "python manage.py check"
 	pythonExe := GetVenvPython(projectDir)
 	checkCmd := exec.Command(pythonExe, "manage.py", "check")
 	checkCmd.Dir = projectDir
