@@ -71,7 +71,6 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) (string, erro
 		return "", fmt.Errorf("django-environ is selected but no SECRET_KEY could be found in settings.py")
 	}
 
-	// INSTALLED_APPS
 	var newApps []string
 	if cfg.HasDependency("djangorestframework") {
 		newApps = append(newApps, "    'rest_framework',")
@@ -94,13 +93,15 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) (string, erro
 	if cfg.HasDependency("django-modeltranslation") {
 		newApps = append(newApps, "    'modeltranslation',")
 	}
+	if cfg.HasDependency("django-extensions") {
+		newApps = append(newApps, "    'django_extensions',")
+	}
 
 	if len(newApps) > 0 && reInstalledApps.MatchString(content) {
 		replacement := "${1}\n" + strings.Join(newApps, "\n")
 		content = reInstalledApps.ReplaceAllString(content, replacement)
 	}
 
-	// MIDDLEWARE for packages
 	if cfg.HasDependency("django-silk") && reMiddleware.MatchString(content) {
 		replacement := "${1}\n    'silk.middleware.SilkyMiddleware',"
 		content = reMiddleware.ReplaceAllString(content, replacement)
@@ -111,7 +112,6 @@ func patchSettings(settingsPath string, cfg *config.ProjectConfig) (string, erro
 		content = reMiddleware.ReplaceAllString(content, replacement)
 	}
 
-	// MEDIA_URL and MEDIA_ROOT
 	if cfg.HasDependency("pillow") {
 		content += `
 # Media files (Uploaded files)
@@ -120,7 +120,6 @@ MEDIA_ROOT = BASE_DIR / 'media'
 `
 	}
 
-	// DATABASES block
 	if block := buildDatabasesBlock(cfg); block != "" {
 		if reDatabasesBlock.MatchString(content) {
 			content = reDatabasesBlock.ReplaceAllLiteralString(content, block)
@@ -129,8 +128,11 @@ MEDIA_ROOT = BASE_DIR / 'media'
 		}
 	}
 
-	// Imports required by the blocks above
-	needsOs := useEnviron || len(cfg.Databases) > 0
+	if block := buildCachesBlock(cfg); block != "" {
+		content += "\n" + block
+	}
+
+	needsOs := useEnviron || len(cfg.Databases) > 0 || cfg.CacheBackend == "redis"
 	content = addSettingsImports(content, needsOs, useEnviron)
 
 	if useEnviron {
@@ -206,8 +208,56 @@ func envOr(key, fallback string) string {
 	return fmt.Sprintf("os.environ.get('%s', '%s')", key, fallback)
 }
 
-// addSettingsImports inserts `import os` and/or `import environ` before the
-// first import in settings.py.
+// buildCachesBlock returns a CACHES dict for the selected backend, or ""
+// when no backend is selected.
+func buildCachesBlock(cfg *config.ProjectConfig) string {
+	switch cfg.CacheBackend {
+	case "dummy":
+		return `CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+    },
+}
+`
+	case "localmem":
+		return fmt.Sprintf(`CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': '%s',
+    },
+}
+`, cfg.ProjectName)
+	case "filebased":
+		return `CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': str(BASE_DIR / 'cache'),
+    },
+}
+`
+	case "db":
+		return `CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache',
+    },
+}
+`
+	case "redis":
+		return `CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        },
+    },
+}
+`
+	}
+	return ""
+}
+
 func addSettingsImports(content string, needsOs, needsEnviron bool) string {
 	var imports []string
 	if needsOs && !regexp.MustCompile(`(?m)^import os\s*$`).MatchString(content) {
@@ -238,7 +288,6 @@ func patchUrls(urlsPath string, cfg *config.ProjectConfig) error {
 	needsStatic := cfg.HasDependency("pillow")
 	needsDebugToolBar := cfg.HasDependency("django-debug-toolbar")
 
-	// 1. Update django.urls import for include
 	if needsInclude {
 		if loc := reDjangoUrlsImport.FindStringSubmatch(content); len(loc) > 1 {
 			imported := loc[1]
@@ -251,7 +300,6 @@ func patchUrls(urlsPath string, cfg *config.ProjectConfig) error {
 		}
 	}
 
-	// Add static / settings imports for media files
 	if needsStatic {
 		staticImports := "from django.conf import settings\nfrom django.conf.urls.static import static\n"
 		if reAdminImport.MatchString(content) {
@@ -270,7 +318,6 @@ func patchUrls(urlsPath string, cfg *config.ProjectConfig) error {
 		}
 	}
 
-	// Add routes inside urlpatterns
 	routes := []string{}
 	if cfg.HasDependency("django-silk") {
 		routes = append(routes, "    path('silk/', include('silk.urls', namespace='silk')),")
@@ -284,7 +331,6 @@ func patchUrls(urlsPath string, cfg *config.ProjectConfig) error {
 		content = reUrlPatterns.ReplaceAllString(content, "${1}\n"+strings.Join(routes, "\n"))
 	}
 
-	// Add media serving in DEBUG mode
 	if cfg.HasDependency("pillow") {
 		content += `
 if settings.DEBUG:
@@ -292,7 +338,6 @@ if settings.DEBUG:
 `
 	}
 
-	// Add debug tool bar config
 	if cfg.HasDependency("django-debug-toolbar") {
 		content += `
 urlpatterns += debug_toolbar_urls()

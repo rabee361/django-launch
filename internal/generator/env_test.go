@@ -106,6 +106,26 @@ func TestGenerateEnvFile_SqliteDatabase(t *testing.T) {
 	}
 }
 
+func TestGenerateEnvFile_RedisCache(t *testing.T) {
+	dir := t.TempDir()
+
+	cfg := &config.ProjectConfig{
+		OutputDir:    dir,
+		Dependencies: []string{"django-environ"},
+		CacheBackend: "redis",
+	}
+
+	if err := GenerateEnvFile(cfg, "secret"); err != nil {
+		t.Fatalf("GenerateEnvFile failed: %v", err)
+	}
+
+	contentBytes, _ := os.ReadFile(filepath.Join(dir, ".env"))
+
+	if !strings.Contains(string(contentBytes), "REDIS_URL=redis://127.0.0.1:6379/1") {
+		t.Errorf("expected REDIS_URL in .env, got:\n%s", contentBytes)
+	}
+}
+
 func TestGenerateEnvFile_DoesNotOverwriteGitignore(t *testing.T) {
 	dir := t.TempDir()
 	existing := "node_modules/\n"

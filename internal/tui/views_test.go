@@ -55,10 +55,10 @@ func TestView_WidthZeroUnchanged(t *testing.T) {
 	if uncapped != wide {
 		t.Errorf("TEST-TUI-24: expected identical frame at width 0 and 500")
 	}
-	if !strings.Contains(uncapped, "Python Imaging Library (required for ImageField & media)") {
-		t.Errorf("TEST-TUI-24: expected full description line at width 0")
+	if !strings.Contains(uncapped, "Pillow") {
+		t.Errorf("TEST-TUI-24: expected dependency name in frame")
 	}
-	if !strings.Contains(uncapped, "Space/x: toggle • a: toggle all • Enter: continue • Esc/Backspace: back") {
+	if !strings.Contains(uncapped, "↑/↓ or k/j: rows • ←/→ or h/l: columns • Space/x: toggle • a: toggle all • Enter: continue • Esc/Backspace: back") {
 		t.Errorf("TEST-TUI-24: expected full help line at width 0")
 	}
 }
@@ -93,15 +93,16 @@ func TestView_ResponsiveHeader(t *testing.T) {
 }
 
 func TestView_StepBadges(t *testing.T) {
-	// TEST-TUI-35: all wizard steps are numbered out of 7
+	// TEST-TUI-35: all wizard steps are numbered out of 8
 	cases := map[Step]string{
-		StepProjectName:  "Step 1/7",
-		StepDocker:       "Step 2/7",
-		StepDependencies: "Step 3/7",
-		StepDataBase:     "Step 4/7",
-		StepAppsCreated:  "Step 5/7",
-		StepTemplates:    "Step 6/7",
-		StepConfirm:      "Step 7/7",
+		StepProjectName:  "Step 1/8",
+		StepDocker:       "Step 2/8",
+		StepDependencies: "Step 3/8",
+		StepDataBase:     "Step 4/8",
+		StepCacheBackend: "Step 5/8",
+		StepAppsCreated:  "Step 6/8",
+		StepTemplates:    "Step 7/8",
+		StepConfirm:      "Step 8/8",
 	}
 	for step, badge := range cases {
 		m := NewModel()
@@ -177,18 +178,50 @@ func TestView_Templates(t *testing.T) {
 	}
 }
 
+func TestView_Dependencies_Grid(t *testing.T) {
+	// TEST-TUI-41: dependencies render in a two-column grid
+	m := NewModel()
+	m.step = StepDependencies
+
+	view := m.View().Content
+	found := false
+	for _, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, "Django REST Framework") && strings.Contains(line, "Pillow") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("TEST-TUI-41: expected the first two dependencies on one grid row, got:\n%s", view)
+	}
+}
+
+func TestView_CacheBackend(t *testing.T) {
+	// TEST-TUI-42: cache backend step renders the backend choices
+	m := NewModel()
+	m.step = StepCacheBackend
+
+	view := m.View().Content
+	for _, expected := range []string{"Dummy", "Local-memory", "File-based", "Database", "Redis"} {
+		if !strings.Contains(view, expected) {
+			t.Errorf("TEST-TUI-42: expected %q in cache backend view, got:\n%s", expected, view)
+		}
+	}
+}
+
 func TestView_ConfirmIncludesNewRows(t *testing.T) {
-	// TEST-TUI-40: confirm card lists database, apps, templates
+	// TEST-TUI-40: confirm card lists database, cache, apps, templates
 	m := NewModel()
 	m.step = StepConfirm
 	m.cfg.ProjectName = "demo_app"
 	m.depChecked["postgresql"] = true
+	m.cacheChoice = 2 // File-based
 	m.appsChecked["api"] = true
 	m.templatesChoice = 1 // root
 
 	view := m.View().Content
 	for _, expected := range []string{
 		"Database     : PostgreSQL",
+		"Cache        : File-based",
 		"Apps         : api",
 		"Templates    : Project root templates/ folder",
 	} {

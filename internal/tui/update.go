@@ -34,6 +34,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case StepDataBase:
 			return m.updateDataBases(msg)
 
+		case StepCacheBackend:
+			return m.updateCacheBackend(msg)
+
 		case StepAppsCreated:
 			return m.updateAppsCreated(msg)
 
@@ -166,16 +169,29 @@ func (m Model) updateDocker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) updateDependencies(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
-		if m.depCursor > 0 {
-			m.depCursor--
+		if m.depCursor >= 2 {
+			m.depCursor -= 2
 		} else {
-			m.depCursor = len(m.depOptions) - 1
+			// wrap to the last row of the same column
+			last := len(m.depOptions) - 1
+			if last%2 != m.depCursor%2 {
+				last--
+			}
+			m.depCursor = last
 		}
 	case "down", "j":
-		if m.depCursor < len(m.depOptions)-1 {
-			m.depCursor++
+		if m.depCursor+2 < len(m.depOptions) {
+			m.depCursor += 2
 		} else {
-			m.depCursor = 0
+			m.depCursor = m.depCursor % 2
+		}
+	case "left", "h":
+		if m.depCursor%2 == 1 {
+			m.depCursor--
+		}
+	case "right", "l":
+		if m.depCursor%2 == 0 && m.depCursor+1 < len(m.depOptions) {
+			m.depCursor++
 		}
 	case "space", "x":
 		currentID := m.depOptions[m.depCursor].ID
@@ -230,11 +246,38 @@ func (m Model) updateDataBases(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.depChecked[opt.ID] = !allSelected
 		}
 	case "enter":
+		m.step = StepCacheBackend
+		return m, nil
+	case "esc", "backspace":
+		m.step = StepDependencies
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m Model) updateCacheBackend(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "up", "k", "left", "h":
+		if m.cacheChoice > 0 {
+			m.cacheChoice--
+		} else {
+			m.cacheChoice = len(m.cacheOptions) - 1
+		}
+	case "down", "j", "right", "l":
+		if m.cacheChoice < len(m.cacheOptions)-1 {
+			m.cacheChoice++
+		} else {
+			m.cacheChoice = 0
+		}
+	case "enter":
+		if m.cacheOptions[m.cacheChoice].ID == "redis" {
+			m.depChecked["django-redis"] = true
+		}
 		m.step = StepAppsCreated
 		m.appsPhase = 0
 		return m, nil
 	case "esc", "backspace":
-		m.step = StepDependencies
+		m.step = StepDataBase
 		return m, nil
 	}
 	return m, nil
@@ -266,7 +309,7 @@ func (m Model) updateAppsCreated(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "esc", "backspace":
-			m.step = StepDataBase
+			m.step = StepCacheBackend
 			return m, nil
 		}
 

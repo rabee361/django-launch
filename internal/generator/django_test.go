@@ -202,6 +202,100 @@ func TestPatchSettings_ErrorHandling(t *testing.T) {
 	}
 }
 
+func TestPatchSettings_DjangoExtensions(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.py")
+	writeSampleFile(t, settingsPath, sampleSettingsPy)
+
+	cfg := &config.ProjectConfig{
+		Dependencies: []string{"django-extensions"},
+	}
+
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
+		t.Fatalf("patchSettings failed: %v", err)
+	}
+
+	contentBytes, _ := os.ReadFile(settingsPath)
+	content := string(contentBytes)
+
+	if !strings.Contains(content, "'django_extensions',") {
+		t.Errorf("expected 'django_extensions' in INSTALLED_APPS, got:\n%s", content)
+	}
+}
+
+func TestPatchSettings_CacheLocalmem(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.py")
+	writeSampleFile(t, settingsPath, sampleSettingsPy)
+
+	cfg := &config.ProjectConfig{
+		ProjectName:  "demo_app",
+		CacheBackend: "localmem",
+	}
+
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
+		t.Fatalf("patchSettings failed: %v", err)
+	}
+
+	contentBytes, _ := os.ReadFile(settingsPath)
+	content := string(contentBytes)
+
+	for _, expected := range []string{
+		"CACHES = {",
+		"'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',",
+		"'LOCATION': 'demo_app',",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Errorf("expected %q in settings, got:\n%s", expected, content)
+		}
+	}
+}
+
+func TestPatchSettings_CacheRedis(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.py")
+	writeSampleFile(t, settingsPath, sampleSettingsPy)
+
+	cfg := &config.ProjectConfig{
+		CacheBackend: "redis",
+	}
+
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
+		t.Fatalf("patchSettings failed: %v", err)
+	}
+
+	contentBytes, _ := os.ReadFile(settingsPath)
+	content := string(contentBytes)
+
+	for _, expected := range []string{
+		"'BACKEND': 'django_redis.cache.RedisCache',",
+		"os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1')",
+		"'CLIENT_CLASS': 'django_redis.client.DefaultClient',",
+		"import os",
+	} {
+		if !strings.Contains(content, expected) {
+			t.Errorf("expected %q in settings, got:\n%s", expected, content)
+		}
+	}
+}
+
+func TestPatchSettings_NoCacheKeepsStock(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, "settings.py")
+	writeSampleFile(t, settingsPath, sampleSettingsPy)
+
+	cfg := &config.ProjectConfig{}
+
+	if _, err := patchSettings(settingsPath, cfg); err != nil {
+		t.Fatalf("patchSettings failed: %v", err)
+	}
+
+	contentBytes, _ := os.ReadFile(settingsPath)
+	if strings.Contains(string(contentBytes), "CACHES") {
+		t.Errorf("expected no CACHES block when no backend is selected, got:\n%s", contentBytes)
+	}
+}
+
 func TestPatchSettings_DatabasesPostgres(t *testing.T) {
 	dir := t.TempDir()
 	settingsPath := filepath.Join(dir, "settings.py")

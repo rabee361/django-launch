@@ -1,6 +1,6 @@
 # django-launch
 
-A terminal wizard that scaffolds a Django project. Answer seven questions and it creates a folder with a virtual environment, Django 6.1 installed, the settings and URLs patched for the packages you picked, starter apps and a Dockerfile if you want one.
+A terminal wizard that scaffolds a Django project. Answer eight questions and it creates a folder with a virtual environment, Django 6.1 installed, the settings and URLs patched for the packages you picked, starter apps and a Dockerfile if you want one.
 
 ## what it creates
 
@@ -9,7 +9,7 @@ A terminal wizard that scaffolds a Django project. Answer seven questions and it
 ├── .venv/                  uv venv, or python -m venv
 ├── requirements.txt        Django>=6.1 plus your selections
 ├── manage.py
-├── .env                    SECRET_KEY and DB variables (django-environ only)
+├── .env                    SECRET_KEY, DB, and cache variables (django-environ only)
 ├── .gitignore              keeps .env and media out of version control
 ├── <project name>/
 │   ├── settings.py         patched for your selections
@@ -44,21 +44,23 @@ On Windows the binary is `django-launch.exe`. Run it from the directory where yo
 
 The wizard runs in the alternate screen. The ASCII banner renders in full when it fits the terminal and shrinks to a one-line title on short terminals so nothing gets clipped.
 
-## the seven steps
+## the eight steps
 
 **1. Project name.** Anything that is a valid Python identifier. Empty names, leading digits, hyphens, spaces, and reserved words such as `django` or `admin` are rejected on the spot.
 
 **2. Docker support.** Yes writes a `Dockerfile` on `python:3.12-slim` and a `.dockerignore`. No skips both.
 
-**3. Dependencies.** Nine optional packages, listed below.
+**3. Dependencies.** Eleven optional packages, listed below, shown in a two-column grid.
 
 **4. Databases.** PostgreSQL, Sqlite, both, or neither. A selection rewrites the `DATABASES` block in `settings.py` to read connection values from environment variables, and PostgreSQL adds `psycopg[binary]` to `requirements.txt`.
 
-**5. Starter apps.** Ask whether to create apps, then pick from `api` and `base` checkboxes. Each app is created with `manage.py startapp`, gets its own `urls.py`, and a route in the project's `urls.py`.
+**5. Cache backend.** Chooses the `CACHES` setting: dummy, local-memory (Django's default), file-based, database table, or Redis. Redis is powered by django-redis, reads `REDIS_URL` from the environment, and automatically selects the django-redis dependency.
 
-**6. Templates folder.** No templates folder, a single root `templates/` folder, or a `templates/` folder inside each created app (only offered when apps were created). Folders are created empty, with a `.gitkeep` so they survive in git.
+**6. Starter apps.** Ask whether to create apps, then pick from `api` and `base` checkboxes. Each app is created with `manage.py startapp`, gets its own `urls.py`, and a route in the project's `urls.py`.
 
-**7. Confirmation.** Shows the project name, target path, Docker choice, dependency list, database, apps, templates, and whether the install will run through uv or pip. Enter starts the generation.
+**7. Templates folder.** No templates folder, a single root `templates/` folder, or a `templates/` folder inside each created app (only offered when apps were created). Folders are created empty, with a `.gitkeep` so they survive in git.
+
+**8. Confirmation.** Shows the project name, target path, Docker choice, dependency list, database, cache backend, apps, templates, and whether the install will run through uv or pip. Enter starts the generation.
 
 ### keys
 
@@ -66,8 +68,9 @@ The wizard runs in the alternate screen. The ASCII banner renders in full when i
 | --- | --- |
 | project name | type or paste, `enter` to continue, `ctrl+c` to quit |
 | docker | `up`/`down`/`left`/`right` or `h`/`j`/`k`/`l` to choose, `y` selects Yes and continues, `n` selects No and continues, `enter` continues, `esc` or `backspace` goes back |
-| dependencies | `up`/`down` or `k`/`j` moves with wraparound, `space` or `x` toggles the row, `a` toggles every row, `enter` continues, `esc` or `backspace` goes back |
+| dependencies | `up`/`down` or `k`/`j` moves between rows with wraparound, `left`/`right` or `h`/`l` moves between columns, `space` or `x` toggles the row, `a` toggles every row, `enter` continues, `esc` or `backspace` goes back |
 | databases | `up`/`down` or `k`/`j` moves with wraparound, `space` or `x` toggles the row, `a` toggles every row, `enter` continues, `esc` or `backspace` goes back |
+| cache backend | `up`/`down` or `h`/`j`/`k`/`l` to choose, `enter` continues, `esc` or `backspace` goes back |
 | starter apps | ask phase: `up`/`down` or `h`/`j`/`k`/`l` to choose, `y` answers Yes and opens the app list, `n` answers No and skips ahead, `enter` continues, `esc` or `backspace` goes back. select phase: `up`/`down` or `k`/`j` moves, `space` or `x` toggles the row, `a` toggles every row, `enter` continues, `esc` or `backspace` returns to the question |
 | templates | `up`/`down` or `h`/`j`/`k`/`l` to choose, `enter` continues, `esc` or `backspace` goes back |
 | confirm | `enter` or `y` starts, `esc`/`backspace`/`b` goes back, `q` or `n` cancels |
@@ -89,8 +92,10 @@ Each step prints a hint line with its keys, and that hint matches this table. `c
 | django-environ | `.env` support: creates `.env` (with the project's `SECRET_KEY`), `.gitignore`, and wires settings |
 | django-debug-toolbar | debug panels during development |
 | django-modeltranslation | translated model fields |
+| django-redis | Redis cache backend, wired by the cache backend step |
+| django-extensions | extra management commands such as `shell_plus`, `runserver_plus`, and `graph_models` |
 
-Seven of these get `INSTALLED_APPS`, middleware, or URL changes written into `settings.py` and `urls.py`. Pillow also adds `MEDIA_URL`, `MEDIA_ROOT`, and the static media route. `django-environ` additionally generates `.env` and `.gitignore` and moves `SECRET_KEY` and database values into environment lookups.
+Eight of these get `INSTALLED_APPS` entries; silk and debug-toolbar also get middleware and URL changes written into `settings.py` and `urls.py`. Pillow adds `MEDIA_URL`, `MEDIA_ROOT`, and the static media route. `django-environ` additionally generates `.env` and `.gitignore` and moves `SECRET_KEY`, database, and cache values into environment lookups.
 
 ## development
 

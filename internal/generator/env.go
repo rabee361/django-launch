@@ -28,6 +28,7 @@ func GenerateEnvFile(cfg *config.ProjectConfig, secretKey string) error {
 	var lines []string
 	lines = append(lines, fmt.Sprintf("SECRET_KEY=%s", secretKey))
 	lines = append(lines, databaseEnvLines(cfg)...)
+	lines = append(lines, cacheEnvLines(cfg)...)
 
 	envPath := filepath.Join(cfg.OutputDir, ".env")
 	if err := os.WriteFile(envPath, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
@@ -59,6 +60,13 @@ func databaseEnvLines(cfg *config.ProjectConfig) []string {
 				"DB_NAME=db.sqlite3",
 			}
 		}
+	}
+	return nil
+}
+
+func cacheEnvLines(cfg *config.ProjectConfig) []string {
+	if cfg.CacheBackend == "redis" {
+		return []string{"REDIS_URL=redis://127.0.0.1:6379/1"}
 	}
 	return nil
 }

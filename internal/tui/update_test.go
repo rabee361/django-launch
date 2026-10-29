@@ -122,29 +122,62 @@ func TestUpdate_StepDependencies(t *testing.T) {
 		t.Fatalf("expected initial depCursor = 0, got %d", m.depCursor)
 	}
 
-	// Move down
+	// Move down moves one row in the grid (same column): 0 -> 2
 	updatedModel, _ := m.Update(specialKey(tea.KeyDown))
 	m = updatedModel.(Model)
-	if m.depCursor != 1 {
-		t.Errorf("TEST-TUI-10: expected depCursor = 1, got %d", m.depCursor)
+	if m.depCursor != 2 {
+		t.Errorf("TEST-TUI-10: expected depCursor = 2 after KeyDown, got %d", m.depCursor)
 	}
 
-	// Wrap around backwards with KeyUp from 0
+	// Right moves to the second column: 2 -> 3
+	updatedModel, _ = m.Update(specialKey(tea.KeyRight))
+	m = updatedModel.(Model)
+	if m.depCursor != 3 {
+		t.Errorf("TEST-TUI-10: expected depCursor = 3 after KeyRight, got %d", m.depCursor)
+	}
+
+	// Left moves back to the first column: 3 -> 2
+	updatedModel, _ = m.Update(specialKey(tea.KeyLeft))
+	m = updatedModel.(Model)
+	if m.depCursor != 2 {
+		t.Errorf("TEST-TUI-10: expected depCursor = 2 after KeyLeft, got %d", m.depCursor)
+	}
+
+	// Up from the first column wraps to the last row of that column
+	lastRow := (len(m.depOptions) - 1) / 2
+	lastCol0 := lastRow * 2
 	m.depCursor = 0
 	updatedModel, _ = m.Update(specialKey(tea.KeyUp))
 	m = updatedModel.(Model)
-	if m.depCursor != len(m.depOptions)-1 {
-		t.Errorf("TEST-TUI-10: expected cursor to wrap to %d, got %d", len(m.depOptions)-1, m.depCursor)
+	if m.depCursor != lastCol0 {
+		t.Errorf("TEST-TUI-10: expected cursor to wrap to %d, got %d", lastCol0, m.depCursor)
 	}
 
-	// Wrap around forwards with KeyDown from end
+	// Down from the last row wraps to the first row
 	updatedModel, _ = m.Update(specialKey(tea.KeyDown))
 	m = updatedModel.(Model)
 	if m.depCursor != 0 {
 		t.Errorf("TEST-TUI-10: expected cursor to wrap back to 0, got %d", m.depCursor)
 	}
 
+	// Right is a no-op on the last row when the second column is empty
+	m.depCursor = lastCol0
+	updatedModel, _ = m.Update(specialKey(tea.KeyRight))
+	m = updatedModel.(Model)
+	if m.depCursor != lastCol0 {
+		t.Errorf("TEST-TUI-10: expected right to stay on the incomplete last row, got %d", m.depCursor)
+	}
+
+	// Down from the second column's last row wraps to row 0, column 1
+	m.depCursor = lastCol0 - 1
+	updatedModel, _ = m.Update(specialKey(tea.KeyDown))
+	m = updatedModel.(Model)
+	if m.depCursor != 1 {
+		t.Errorf("TEST-TUI-10: expected cursor to wrap to 1, got %d", m.depCursor)
+	}
+
 	// Space toggles current item
+	m.depCursor = 0
 	targetID := m.depOptions[0].ID
 	if m.depChecked[targetID] {
 		t.Fatalf("expected %q initially unchecked", targetID)
@@ -267,14 +300,11 @@ func TestUpdate_StepDataBases(t *testing.T) {
 		t.Errorf("expected dbCursor to wrap to %d, got %d", len(m.dbOptions)-1, m.dbCursor)
 	}
 
-	// Enter advances to StepAppsCreated
+	// Enter advances to StepCacheBackend
 	updatedModel, _ = m.Update(specialKey(tea.KeyEnter))
 	m = updatedModel.(Model)
-	if m.step != StepAppsCreated {
-		t.Errorf("expected StepAppsCreated after Enter, got %v", m.step)
-	}
-	if m.appsPhase != 0 {
-		t.Errorf("expected appsPhase reset to 0 (ask), got %d", m.appsPhase)
+	if m.step != StepCacheBackend {
+		t.Errorf("expected StepCacheBackend after Enter, got %v", m.step)
 	}
 
 	// Esc returns to StepDependencies
@@ -283,6 +313,56 @@ func TestUpdate_StepDataBases(t *testing.T) {
 	m = updatedModel.(Model)
 	if m.step != StepDependencies {
 		t.Errorf("expected StepDependencies after Esc, got %v", m.step)
+	}
+}
+
+func TestUpdate_StepCacheBackend(t *testing.T) {
+	// TEST-TUI-29: cache backend radio navigation
+	m := NewModel()
+	m.step = StepCacheBackend
+	m.cacheChoice = 0
+
+	updatedModel, _ := m.Update(specialKey(tea.KeyDown))
+	m = updatedModel.(Model)
+	if m.cacheChoice != 1 {
+		t.Errorf("expected cacheChoice = 1 after KeyDown, got %d", m.cacheChoice)
+	}
+
+	// Wrap around backwards
+	m.cacheChoice = 0
+	updatedModel, _ = m.Update(specialKey(tea.KeyUp))
+	m = updatedModel.(Model)
+	if m.cacheChoice != len(m.cacheOptions)-1 {
+		t.Errorf("expected cacheChoice to wrap to %d, got %d", len(m.cacheOptions)-1, m.cacheChoice)
+	}
+
+	// Wrap around forwards
+	updatedModel, _ = m.Update(specialKey(tea.KeyDown))
+	m = updatedModel.(Model)
+	if m.cacheChoice != 0 {
+		t.Errorf("expected cacheChoice to wrap to 0, got %d", m.cacheChoice)
+	}
+
+	// Enter with redis auto-checks django-redis and advances to apps
+	m.cacheChoice = 4 // redis
+	updatedModel, _ = m.Update(specialKey(tea.KeyEnter))
+	m = updatedModel.(Model)
+	if m.step != StepAppsCreated {
+		t.Errorf("expected StepAppsCreated after Enter, got %v", m.step)
+	}
+	if m.appsPhase != 0 {
+		t.Errorf("expected appsPhase reset to 0 (ask), got %d", m.appsPhase)
+	}
+	if !m.depChecked["django-redis"] {
+		t.Errorf("expected django-redis auto-checked when redis is chosen")
+	}
+
+	// Esc returns to StepDataBase
+	m.step = StepCacheBackend
+	updatedModel, _ = m.Update(specialKey(tea.KeyEsc))
+	m = updatedModel.(Model)
+	if m.step != StepDataBase {
+		t.Errorf("expected StepDataBase after Esc, got %v", m.step)
 	}
 }
 
@@ -327,13 +407,13 @@ func TestUpdate_StepAppsCreated_Ask(t *testing.T) {
 		t.Errorf("expected Yes + select phase after 'y', got choice=%d phase=%d", m.appsChoice, m.appsPhase)
 	}
 
-	// Esc returns to StepDataBase
+	// Esc returns to StepCacheBackend
 	m = NewModel()
 	m.step = StepAppsCreated
 	updatedModel, _ = m.Update(specialKey(tea.KeyEsc))
 	m = updatedModel.(Model)
-	if m.step != StepDataBase {
-		t.Errorf("expected StepDataBase after Esc, got %v", m.step)
+	if m.step != StepCacheBackend {
+		t.Errorf("expected StepCacheBackend after Esc, got %v", m.step)
 	}
 }
 
@@ -682,6 +762,7 @@ func TestUpdate_GlobalQuit(t *testing.T) {
 		StepDocker,
 		StepDependencies,
 		StepDataBase,
+		StepCacheBackend,
 		StepAppsCreated,
 		StepTemplates,
 		StepConfirm,

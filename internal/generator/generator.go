@@ -23,7 +23,6 @@ func GenerateProject(ctx context.Context, cfg *config.ProjectConfig, onProgress 
 	}
 	currentStep := 1
 
-	// Ensure OutputDir is set
 	if cfg.OutputDir == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -32,7 +31,6 @@ func GenerateProject(ctx context.Context, cfg *config.ProjectConfig, onProgress 
 		cfg.OutputDir = filepath.Join(cwd, cfg.ProjectName)
 	}
 
-	// Create directory
 	if onProgress != nil {
 		onProgress(currentStep, totalSteps, fmt.Sprintf("Creating project directory '%s'...", cfg.ProjectName))
 	}
@@ -44,7 +42,6 @@ func GenerateProject(ctx context.Context, cfg *config.ProjectConfig, onProgress 
 	}
 	currentStep++
 
-	// Create virtual environment
 	toolName := "python -m venv"
 	if cfg.UseUv {
 		toolName = "uv venv"
@@ -57,7 +54,6 @@ func GenerateProject(ctx context.Context, cfg *config.ProjectConfig, onProgress 
 	}
 	currentStep++
 
-	// Write requirements.txt & install dependencies
 	if onProgress != nil {
 		onProgress(currentStep, totalSteps, "Writing requirements.txt and installing dependencies...")
 	}
@@ -72,7 +68,6 @@ func GenerateProject(ctx context.Context, cfg *config.ProjectConfig, onProgress 
 	}
 	currentStep++
 
-	// Start Django project
 	if onProgress != nil {
 		onProgress(currentStep, totalSteps, fmt.Sprintf("Initializing Django project '%s'...", cfg.ProjectName))
 	}
@@ -81,7 +76,6 @@ func GenerateProject(ctx context.Context, cfg *config.ProjectConfig, onProgress 
 	}
 	currentStep++
 
-	// Deep scaffold settings, urls, apps, and environment files
 	if onProgress != nil {
 		onProgress(currentStep, totalSteps, "Scaffolding settings.py, urls.py, apps, and environment files...")
 	}
@@ -100,7 +94,6 @@ func GenerateProject(ctx context.Context, cfg *config.ProjectConfig, onProgress 
 	}
 	currentStep++
 
-	// Docker (if requested)
 	if cfg.WithDocker {
 		if onProgress != nil {
 			onProgress(currentStep, totalSteps, "Generating Dockerfile and .dockerignore...")

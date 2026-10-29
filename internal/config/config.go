@@ -7,6 +7,7 @@ type ProjectConfig struct {
 	Databases    []string // e.g. "sqlite", "postgresql" and others
 	Apps         []string // e.g. "api", "base" starter apps to create
 	Templates    string   // "none", "root", or "perapp"
+	CacheBackend string   // "localmem", "redis", "dummy", "filebased", or "db"
 	UseUv        bool
 	PythonCmd    string
 	OutputDir    string

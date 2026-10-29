@@ -23,6 +23,7 @@ const (
 	StepDocker
 	StepDependencies
 	StepDataBase
+	StepCacheBackend
 	StepAppsCreated
 	StepTemplates
 	StepConfirm
@@ -42,12 +43,17 @@ type doneMsg struct {
 }
 
 type DependencyOption struct {
+	ID   string
+	Name string
+}
+
+type DatabaseOption struct {
 	ID          string
 	Name        string
 	Description string
 }
 
-type DatabaseOption struct {
+type CacheOption struct {
 	ID          string
 	Name        string
 	Description string
@@ -78,16 +84,18 @@ type Model struct {
 
 	dockerChoice int
 
-	depOptions  []DependencyOption
-	dbOptions   []DatabaseOption
-	appOptions  []AppOption
-	depCursor   int
-	dbCursor    int
-	appsCursor  int
-	depChecked  map[string]bool
-	appsChecked map[string]bool
-	appsChoice  int // 0 = No, 1 = Yes
-	appsPhase   int // 0 = ask yes/no, 1 = select apps
+	depOptions   []DependencyOption
+	dbOptions    []DatabaseOption
+	cacheOptions []CacheOption
+	appOptions   []AppOption
+	depCursor    int
+	dbCursor     int
+	cacheChoice  int
+	appsCursor   int
+	depChecked   map[string]bool
+	appsChecked  map[string]bool
+	appsChoice   int // 0 = No, 1 = Yes
+	appsPhase    int // 0 = ask yes/no, 1 = select apps
 
 	templatesChoice int
 
@@ -128,51 +136,17 @@ func NewModel() Model {
 		pythonCmd:    pyCmd,
 		dockerChoice: 0,
 		depOptions: []DependencyOption{
-			{
-				ID:          "djangorestframework",
-				Name:        "Django REST Framework",
-				Description: "Toolkit for building Web APIs",
-			},
-			{
-				ID:          "pillow",
-				Name:        "Pillow",
-				Description: "Python Imaging Library (required for ImageField & media)",
-			},
-			{
-				ID:          "django-silk",
-				Name:        "Django Silk",
-				Description: "Profiling and SQL query inspection",
-			},
-			{
-				ID:          "djangorestframework-simplejwt",
-				Name:        "Django REST Framework Simple JWT",
-				Description: "Token authentication for the REST framework",
-			},
-			{
-				ID:          "django-filter",
-				Name:        "Django Filters",
-				Description: "Filtering for API views",
-			},
-			{
-				ID:          "django-cors-headers",
-				Name:        "Django CORS Headers",
-				Description: "CORS response headers",
-			},
-			{
-				ID:          "django-environ",
-				Name:        "Django Environ",
-				Description: "Environment variable handling with .env support",
-			},
-			{
-				ID:          "django-debug-toolbar",
-				Name:        "Django Debug Toolbar",
-				Description: "Debug panels during development",
-			},
-			{
-				ID:          "django-modeltranslation",
-				Name:        "Django ModelTranslation",
-				Description: "Translated model fields",
-			},
+			{ID: "djangorestframework", Name: "Django REST Framework"},
+			{ID: "pillow", Name: "Pillow"},
+			{ID: "django-silk", Name: "Django Silk"},
+			{ID: "djangorestframework-simplejwt", Name: "Django REST Framework Simple JWT"},
+			{ID: "django-filter", Name: "Django Filters"},
+			{ID: "django-cors-headers", Name: "Django CORS Headers"},
+			{ID: "django-environ", Name: "Django Environ"},
+			{ID: "django-debug-toolbar", Name: "Django Debug Toolbar"},
+			{ID: "django-modeltranslation", Name: "Django ModelTranslation"},
+			{ID: "django-redis", Name: "Django Redis"},
+			{ID: "django-extensions", Name: "Django Extensions"},
 		},
 		dbOptions: []DatabaseOption{
 			{
@@ -184,6 +158,33 @@ func NewModel() Model {
 				ID:          "sqlite",
 				Name:        "Sqlite",
 				Description: "File-based zero-configuration database",
+			},
+		},
+		cacheOptions: []CacheOption{
+			{
+				ID:          "dummy",
+				Name:        "Dummy",
+				Description: "Discards everything (for tests and load checks)",
+			},
+			{
+				ID:          "localmem",
+				Name:        "Local-memory",
+				Description: "In-process memory cache (Django's default)",
+			},
+			{
+				ID:          "filebased",
+				Name:        "File-based",
+				Description: "Stores entries under cache/ at the project root",
+			},
+			{
+				ID:          "db",
+				Name:        "Database",
+				Description: "Stores entries in a database table (run createcachetable)",
+			},
+			{
+				ID:          "redis",
+				Name:        "Redis",
+				Description: "django-redis powered cache, configured via REDIS_URL",
 			},
 		},
 		appOptions: []AppOption{
@@ -200,6 +201,7 @@ func NewModel() Model {
 		},
 		depCursor:   0,
 		dbCursor:    0,
+		cacheChoice: 1,
 		appsCursor:  0,
 		depChecked:  make(map[string]bool),
 		appsChecked: make(map[string]bool),
@@ -231,7 +233,6 @@ func validateProjectName(name string) error {
 	return nil
 }
 
-// selectedApps returns the ids of the apps the user picked.
 func (m Model) selectedApps() []string {
 	var apps []string
 	for _, opt := range m.appOptions {
@@ -242,8 +243,6 @@ func (m Model) selectedApps() []string {
 	return apps
 }
 
-// templateOptions returns the templates folder choices; per-app folders only
-// make sense when at least one app is created.
 func (m Model) templateOptions() []TemplateOption {
 	opts := []TemplateOption{
 		{
@@ -272,6 +271,10 @@ func (m *Model) startGeneration() tea.Cmd {
 	m.progressItems = nil
 	m.currentTask = "Starting project generation..."
 
+	if m.cacheOptions[m.cacheChoice].ID == "redis" {
+		m.depChecked["django-redis"] = true
+	}
+
 	var deps []string
 	for _, opt := range m.depOptions {
 		if m.depChecked[opt.ID] {
@@ -291,6 +294,7 @@ func (m *Model) startGeneration() tea.Cmd {
 	m.cfg.Dependencies = deps
 	m.cfg.Databases = dbs
 	m.cfg.Apps = apps
+	m.cfg.CacheBackend = m.cacheOptions[m.cacheChoice].ID
 	m.cfg.Templates = "none"
 	if opts := m.templateOptions(); m.templatesChoice < len(opts) {
 		m.cfg.Templates = opts[m.templatesChoice].ID

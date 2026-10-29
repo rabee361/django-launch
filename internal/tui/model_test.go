@@ -152,8 +152,8 @@ func TestNewModel(t *testing.T) {
 		t.Errorf("TEST-TUI-06: expected default dockerChoice to be 0 (Yes), got %d", m.dockerChoice)
 	}
 
-	if len(m.depOptions) != 9 {
-		t.Errorf("TEST-TUI-06: expected 9 dependency options, got %d", len(m.depOptions))
+	if len(m.depOptions) != 11 {
+		t.Errorf("TEST-TUI-06: expected 11 dependency options, got %d", len(m.depOptions))
 	}
 
 	expectedIDs := []string{
@@ -166,6 +166,8 @@ func TestNewModel(t *testing.T) {
 		"django-environ",
 		"django-debug-toolbar",
 		"django-modeltranslation",
+		"django-redis",
+		"django-extensions",
 	}
 	for i, id := range expectedIDs {
 		if m.depOptions[i].ID != id {
@@ -186,6 +188,13 @@ func TestNewModel(t *testing.T) {
 	}
 	if m.dbCursor != 0 {
 		t.Errorf("TEST-TUI-06: expected dbCursor = 0, got %d", m.dbCursor)
+	}
+
+	if len(m.cacheOptions) != 5 {
+		t.Errorf("TEST-TUI-06: expected 5 cache backend options, got %d", len(m.cacheOptions))
+	}
+	if m.cacheChoice != 1 {
+		t.Errorf("TEST-TUI-06: expected cacheChoice = 1 (localmem), got %d", m.cacheChoice)
 	}
 
 	if len(m.appOptions) != 2 {
